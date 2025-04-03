@@ -18,7 +18,9 @@ from collections import deque
 import _sobel_spy
 
 def sobel(frame, output):
-    h, w, d = frame.shape
+    # temporary hack: the spy version expects a 2d grayscale, not a 3d RGB
+    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    h, w = frame.shape
     ptr_frame = _sobel_spy.ffi.from_buffer(frame)
     ptr_output = _sobel_spy.ffi.from_buffer(output)
     _sobel_spy.lib.sobel(ptr_frame, w, h, ptr_output)

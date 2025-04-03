@@ -13,8 +13,16 @@ import sys
 import time
 from collections import deque
 
-from _sobel_cython import sobel
+#from _sobel_cython import sobel
 #from _sobel_python import sobel
+import _sobel_spy
+
+def sobel(frame, output):
+    h, w, d = frame.shape
+    ptr_frame = _sobel_spy.ffi.from_buffer(frame)
+    ptr_output = _sobel_spy.ffi.from_buffer(output)
+    _sobel_spy.lib.sobel(ptr_frame, w, h, ptr_output)
+
 
 def read_frames(source):
     """Read frames from webcam or video file."""
@@ -29,8 +37,8 @@ def read_frames(source):
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    width = 80
-    height = 60
+    ## width = 80
+    ## height = 60
 
     output = np.empty((height, width, 3), dtype=np.uint8)
 
@@ -52,7 +60,7 @@ def read_frames(source):
             if not ret:
                 break
 
-            frame = cv2.resize(frame, (width, height))
+            #frame = cv2.resize(frame, (width, height))
             sobel(frame, output)
             display = np.hstack((frame, output))
 

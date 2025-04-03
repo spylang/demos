@@ -1,0 +1,47 @@
+from unsafe import ptr
+from math import sqrt
+
+def sobel(frame: ptr[u8], w: i32, h: i32, output: ptr[u8]) -> void:
+    ## for y in xrange(1, h-1):
+    ##     x = 1
+    ##     while x < w-1:
+    ##         dx = (-1.0 * data[(x-1) + w*(y-1)] +
+    ##                1.0 * data[(x+1) + w*(y-1)] +
+    ##               -2.0 * data[(x-1) + w*y    ] +
+    ##                2.0 * data[(x+1) + w*y    ] +
+    ##               -1.0 * data[(x-1) + w*(y+1)] +
+    ##                1.0 * data[(x+1) + w*(y+1)])
+    ##         #
+    ##         dy = (-1.0 * data[(x-1) + w*(y-1)] +
+    ##               -2.0 * data[x     + w*(y-1)] +
+    ##               -1.0 * data[(x+1) + w*(y-1)] +
+    ##                1.0 * data[(x-1) + w*(y+1)] +
+    ##                2.0 * data[x     + w*(y+1)] +
+    ##                1.0 * data[(x+1) + w*(y+1)])
+    ##         #
+    ##         value = min(int(sqrt(dx*dx + dy*dy) / 2.0), 255)
+    ##         data_out[x + w*y] = value
+    ##         x += 1
+
+    y = 1
+    while y < h-1:
+        x = 1
+        while x < w-1:
+            dx = (-1.0 * frame[(x-1) + w*(y-1)] +
+                   1.0 * frame[(x+1) + w*(y-1)] +
+                  -2.0 * frame[(x-1) + w*y    ] +
+                   2.0 * frame[(x+1) + w*y    ] +
+                  -1.0 * frame[(x-1) + w*(y+1)] +
+                   1.0 * frame[(x+1) + w*(y+1)])
+            #
+            dy = (-1.0 * frame[(x-1) + w*(y-1)] +
+                  -2.0 * frame[x     + w*(y-1)] +
+                  -1.0 * frame[(x+1) + w*(y-1)] +
+                   1.0 * frame[(x-1) + w*(y+1)] +
+                   2.0 * frame[x     + w*(y+1)] +
+                   1.0 * frame[(x+1) + w*(y+1)])
+            #
+            value = min(int(sqrt(dx*dx + dy*dy) / 2.0), 255)
+            output[x + w*y] = value
+            x = x + 1
+        y = y + 1

@@ -1,7 +1,9 @@
 import numpy as np
 import js
+from pyodide.code import run_js
 from pyodide.ffi import to_js, create_proxy
 from js import document, window, requestAnimationFrame, cancelAnimationFrame
+from js import Uint8ClampedArray, ImageData
 import time
 from pyscript import when
 from sobel_np import sobel_np
@@ -51,21 +53,26 @@ def calculate_fps(timestamp):
         last_time = timestamp
         update_status()
 
+
+W, H = 400, 300
+W, H = 160, 120
+
+
 def process_frame(timestamp):
     global animation_id
     calculate_fps(timestamp)
 
     # Draw the current video frame to canvas
-    original_ctx.drawImage(
-        video, 0, 0,
-        original_canvas.width,
-        original_canvas.height)
+    original_ctx.drawImage(video, 0, 0, W, H)
 
     # Get image data
-    img_data = original_ctx.getImageData(
-        0, 0, original_canvas.width, original_canvas.height)
-    processed_img_data = sobel_np(img_data)
-    processed_ctx.putImageData(processed_img_data, 0, 0)
+    img_data = original_ctx.getImageData(0, 0, W, H)
+    buf = np.array(img_data.data)
+
+    buf2 = sobel_np(buf, H, W)
+    js_buf2 = Uint8ClampedArray.new(to_js(buf2))
+    img_data2 = ImageData.new(js_buf2, W, H)
+    processed_ctx.putImageData(img_data2, 0, 0)
 
     # Continue the processing loop
     frame_proxy = create_proxy(process_frame)
@@ -102,8 +109,10 @@ async def start_camera(ev):
     # Get user media with constraints
     constraints = {
         "video": {
-            "width": {"ideal": 640},
-            "height": {"ideal": 480},
+            ## "width": {"ideal": 640},
+            ## "height": {"ideal": 480},
+            "width": {"ideal": 160},
+            "height": {"ideal": 120},
             "facingMode": "user"
         }
     }

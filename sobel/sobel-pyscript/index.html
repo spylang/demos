@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Edge Detection with PyScript</title>
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://pyscript.net/releases/2025.3.1/core.css">
+    <script type="module" src="https://pyscript.net/releases/2025.3.1/core.js"></script>
+
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #343a40;
+        }
+
+        .video-container {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .video-box {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 15px;
+            text-align: center;
+        }
+
+        .video-title {
+            font-size: 1.2rem;
+            margin-bottom: 10px;
+            color: #495057;
+        }
+
+        video, canvas {
+            border-radius: 4px;
+            max-width: 100%;
+            background-color: #f1f1f1;
+        }
+
+        .controls {
+            text-align: center;
+            margin: 20px auto;
+            max-width: 500px;
+        }
+
+        .btn-primary {
+            background-color: #0d6efd;
+            border-color: #0d6efd;
+            padding: 10px 20px;
+            margin: 0 5px;
+            border-radius: 4px;
+        }
+
+        .btn-danger {
+            background-color: #dc3545;
+            border-color: #dc3545;
+            padding: 10px 20px;
+            margin: 0 5px;
+            border-radius: 4px;
+        }
+
+        .options {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+
+        .status {
+            margin-top: 10px;
+            font-style: italic;
+            color: #6c757d;
+        }
+
+        @media (max-width: 850px) {
+            .video-container {
+                flex-direction: column;
+                align-items: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Real-time Edge Detection with PyScript</h1>
+            <p class="lead">Using Sobel operator for edge detection in your webcam feed</p>
+        </div>
+
+        <div class="video-container">
+            <div class="video-box">
+                <h3 class="video-title">Original Feed</h3>
+                <video id="video" width="400" height="300" autoplay muted></video>
+            </div>
+            <div class="video-box">
+                <h3 class="video-title">Edge Detection</h3>
+                <canvas id="processed" width="400" height="300"></canvas>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="startBtn" class="btn btn-primary">
+              <i class="bi bi-camera-video"></i> Start Camera
+            </button>
+            <button id="stopBtn" class="btn btn-danger" py-click="stop_camera">
+                <i class="bi bi-stop-circle"></i> Stop Camera
+            </button>
+
+            <div class="options">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="highContrast" py-change="toggle_contrast()">
+                    <label class="form-check-label" for="highContrast">High Contrast</label>
+                </div>
+                <div class="status" id="status">Ready to detect edges</div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Edge detection demonstrates computer vision techniques to identify boundaries in images</p>
+        </div>
+    </div>
+
+    <canvas id="original" width="400" height="300" style="display:none;"></canvas>
+
+    <script type="py" src="main.py" config="pyscript.toml" terminal>
+    </script>
+
+</body>
+</html>

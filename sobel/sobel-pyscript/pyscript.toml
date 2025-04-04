@@ -1,0 +1,5 @@
+name = "Bug"
+packages = ["numpy"]
+
+[files]
+"sobel_np.py" = ""

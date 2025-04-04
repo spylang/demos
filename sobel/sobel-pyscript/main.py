@@ -58,8 +58,8 @@ W, H = 400, 300
 W, H = 160, 120
 
 # preallocate input and output buffers
-buf = np.zeros(H*W*4, dtype=np.uint8)
-outbuf = np.zeros(H*W*4, dtype=np.uint8)
+in_buf = np.zeros(H*W*4, dtype=np.uint8)
+out_buf = np.zeros(H*W*4, dtype=np.uint8)
 
 def process_frame(timestamp):
     global animation_id
@@ -67,13 +67,18 @@ def process_frame(timestamp):
 
     # Draw the current video frame to canvas and get image data
     original_ctx.drawImage(video, 0, 0, W, H)
-    img_data = original_ctx.getImageData(0, 0, W, H)
-    np.copyto(buf, img_data.data, casting='unsafe')
+    in_img_data = original_ctx.getImageData(0, 0, W, H)
 
-    sobel_np(buf, H, W, outbuf)
+    # copy img_data into the input buffer
+    np.copyto(in_buf, in_img_data.data, casting='unsafe')
 
-    js_outbuf = Uint8ClampedArray.new(to_js(outbuf))
-    out_img_data = ImageData.new(js_outbuf, W, H)
+    # actual processing
+    sobel_np(in_buf, H, W, out_buf)
+
+    # copy the pixels into the canvas using a complicated route, but I think
+    # it's the only possible way
+    js_out_buf = Uint8ClampedArray.new(to_js(out_buf))
+    out_img_data = ImageData.new(js_out_buf, W, H)
     processed_ctx.putImageData(out_img_data, 0, 0)
 
     # Continue the processing loop

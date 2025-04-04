@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Edge Detection</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+            padding: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #343a40;
+        }
+        
+        .video-container {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .video-box {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 15px;
+            text-align: center;
+        }
+        
+        .video-title {
+            font-size: 1.2rem;
+            margin-bottom: 10px;
+            color: #495057;
+        }
+        
+        video, canvas {
+            border-radius: 4px;
+            max-width: 100%;
+            background-color: #f1f1f1;
+        }
+        
+        .controls {
+            text-align: center;
+            margin: 20px auto;
+            max-width: 500px;
+        }
+        
+        .btn-primary {
+            background-color: #0d6efd;
+            border-color: #0d6efd;
+            padding: 10px 20px;
+            margin: 0 5px;
+            border-radius: 4px;
+        }
+        
+        .btn-danger {
+            background-color: #dc3545;
+            border-color: #dc3545;
+            padding: 10px 20px;
+            margin: 0 5px;
+            border-radius: 4px;
+        }
+        
+        .options {
+            margin-top: 20px;
+            text-align: center;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+        
+        .status {
+            margin-top: 10px;
+            font-style: italic;
+            color: #6c757d;
+        }
+        
+        @media (max-width: 850px) {
+            .video-container {
+                flex-direction: column;
+                align-items: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Real-time Edge Detection</h1>
+            <p class="lead">Using Sobel operator for edge detection in your webcam feed</p>
+        </div>
+
+        <div class="video-container">
+            <div class="video-box">
+                <h3 class="video-title">Original Feed</h3>
+                <video id="video" width="400" height="300" autoplay muted></video>
+            </div>
+            <div class="video-box">
+                <h3 class="video-title">Edge Detection</h3>
+                <canvas id="processed" width="400" height="300"></canvas>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="startBtn" class="btn btn-primary">
+                <i class="bi bi-camera-video"></i> Start Camera
+            </button>
+            <button id="stopBtn" class="btn btn-danger">
+                <i class="bi bi-stop-circle"></i> Stop Camera
+            </button>
+            
+            <div class="options">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="highContrast">
+                    <label class="form-check-label" for="highContrast">High Contrast</label>
+                </div>
+                <div class="status" id="status">Ready to detect edges</div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Edge detection demonstrates computer vision techniques to identify boundaries in images</p>
+        </div>
+    </div>
+
+    <canvas id="original" width="400" height="300" style="display:none;"></canvas>
+
+    <script>
+        // Element references
+        const video = document.getElementById('video');
+        const originalCanvas = document.getElementById('original');
+        const processedCanvas = document.getElementById('processed');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const statusElement = document.getElementById('status');
+        const highContrastCheckbox = document.getElementById('highContrast');
+
+        // Canvas contexts
+        const originalCtx = originalCanvas.getContext('2d');
+        const processedCtx = processedCanvas.getContext('2d', { willReadFrequently: true });
+
+        let stream = null;
+        let animationId = null;
+        let wasmProcessor = null;
+        let highContrast = false;
+        let frameCount = 0;
+        let lastTime = 0;
+        let fps = 0;
+
+        // Initialize WASM (placeholder for actual WASM loading)
+        async function initWasm() {
+            try {
+                // This is where you would load your WASM module
+                // Example: wasmProcessor = await import('./path-to-wasm.js');
+                console.log("WASM would be initialized here");
+                // For now, we'll just use the JS implementation
+                return false;
+            } catch (err) {
+                console.error("Failed to load WASM module:", err);
+                return false;
+            }
+        }
+
+        // Sobel edge detection in JavaScript
+        function sobelEdgeDetection(imgData) {
+            const pixels = imgData.data;
+            const width = imgData.width;
+            const height = imgData.height;
+            const output = new Uint8ClampedArray(pixels.length);
+
+            // Sobel kernels
+            const kernelX = [-1, 0, 1, -2, 0, 2, -1, 0, 1];
+            const kernelY = [-1, -2, -1, 0, 0, 0, 1, 2, 1];
+
+            for (let y = 1; y < height - 1; y++) {
+                for (let x = 1; x < width - 1; x++) {
+                    const idx = (y * width + x) * 4;
+
+                    // Calculate gradient with Sobel
+                    let gx = 0;
+                    let gy = 0;
+
+                    for (let ky = -1; ky <= 1; ky++) {
+                        for (let kx = -1; kx <= 1; kx++) {
+                            const pos = ((y + ky) * width + (x + kx)) * 4;
+                            const val = (pixels[pos] + pixels[pos + 1] + pixels[pos + 2]) / 3;
+
+                            gx += val * kernelX[(ky + 1) * 3 + (kx + 1)];
+                            gy += val * kernelY[(ky + 1) * 3 + (kx + 1)];
+                        }
+                    }
+
+                    const magnitude = Math.sqrt(gx * gx + gy * gy);
+                    
+                    // Apply high contrast if enabled
+                    let normalized;
+                    if (highContrast) {
+                        normalized = magnitude > 50 ? 255 : 0; // Threshold for high contrast
+                    } else {
+                        normalized = Math.min(255, magnitude);
+                    }
+
+                    output[idx] = normalized;
+                    output[idx + 1] = normalized;
+                    output[idx + 2] = normalized;
+                    output[idx + 3] = 255;
+                }
+            }
+
+            return new ImageData(output, width, height);
+        }
+
+        // Process function that can be implemented in either JS or WASM
+        async function process(imgData) {
+            if (wasmProcessor) {
+                // If WASM is available, use it
+                return wasmProcessor.processImage(imgData);
+            } else {
+                // Fall back to JS implementation
+                return sobelEdgeDetection(imgData);
+            }
+        }
+
+        // Calculate FPS
+        function calculateFPS(timestamp) {
+            if (!lastTime) {
+                lastTime = timestamp;
+                return;
+            }
+            
+            frameCount++;
+            
+            // Update FPS once per second
+            if (timestamp - lastTime >= 1000) {
+                fps = Math.round((frameCount * 1000) / (timestamp - lastTime));
+                frameCount = 0;
+                lastTime = timestamp;
+                
+                // Update status with FPS
+                updateStatus();
+            }
+        }
+
+        // Update status display
+        function updateStatus() {
+            let statusMessage = '';
+            
+            if (!stream) {
+                statusMessage = 'Camera inactive';
+            } else {
+                statusMessage = `Processing: ${fps} FPS`;
+                if (highContrast) {
+                    statusMessage += ' (High contrast mode)';
+                }
+                if (!wasmProcessor) {
+                    statusMessage += ' - Using JavaScript';
+                } else {
+                    statusMessage += ' - Using WebAssembly';
+                }
+            }
+            
+            statusElement.textContent = statusMessage;
+        }
+
+        // Process a frame from the video
+        async function processFrame(timestamp) {
+            // Calculate FPS
+            calculateFPS(timestamp);
+            
+            // Draw the current video frame to canvas
+            originalCtx.drawImage(video, 0, 0, originalCanvas.width, originalCanvas.height);
+
+            // Get image data
+            const imgData = originalCtx.getImageData(0, 0, originalCanvas.width, originalCanvas.height);
+
+            // Process the image
+            const processedImgData = await process(imgData);
+
+            // Draw the processed image
+            processedCtx.putImageData(processedImgData, 0, 0);
+
+            // Continue the processing loop
+            animationId = requestAnimationFrame(processFrame);
+        }
+
+        // Start camera and processing
+        async function startCamera() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        facingMode: "user"
+                    } 
+                });
+                video.srcObject = stream;
+
+                // Wait for video to be ready
+                video.onloadedmetadata = () => {
+                    video.play();
+                    processFrame();
+                    updateStatus();
+                };
+
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+                
+                statusElement.textContent = "Starting camera...";
+            } catch (err) {
+                console.error("Error accessing webcam:", err);
+                statusElement.textContent = "Error: Could not access camera";
+            }
+        }
+
+        // Stop camera and processing
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+            }
+
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            
+            // Reset fps counters
+            frameCount = 0;
+            lastTime = 0;
+            fps = 0;
+            
+            updateStatus();
+        }
+
+        // Initialize
+        async function init() {
+            stopBtn.disabled = true;
+
+            // Try to load WASM module
+            wasmProcessor = await initWasm();
+
+            // Set up button listeners
+            startBtn.addEventListener('click', startCamera);
+            stopBtn.addEventListener('click', stopCamera);
+            
+            // Set up high contrast toggle
+            highContrastCheckbox.addEventListener('change', function() {
+                highContrast = this.checked;
+                updateStatus();
+            });
+            
+            updateStatus();
+        }
+
+        // Start the app
+        init();
+    </script>
+</body>
+</html>

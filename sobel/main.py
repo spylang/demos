@@ -93,12 +93,15 @@ def read_frames(source):
         cv2.destroyAllWindows()
 
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Process and display video frames."
     )
     parser.add_argument(
         "source",
+        nargs='?',
+        default='0',
         help="Video source (0 for webcam, or path to video file)"
     )
     args = parser.parse_args()

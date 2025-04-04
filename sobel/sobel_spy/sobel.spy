@@ -21,10 +21,14 @@ def sobel(frame: ptr[u8], w: int, h: int, output: ptr[u8]) -> void:
                    1.0 * frame[(x+1) + w*(y+1)])
             #
             value = min(int(sqrt(dx*dx + dy*dy) / 2.0), 255)
-            #output[x + w*y] = value
-            output[(y*w + x) * 3 + 0] = value
-            output[(y*w + x) * 3 + 1] = value
-            output[(y*w + x) * 3 + 2] = value
+
+            # gray output
+            output[x + w*y] = value
+
+            # RGB output
+            ## output[(y*w + x) * 3 + 0] = value
+            ## output[(y*w + x) * 3 + 1] = value
+            ## output[(y*w + x) * 3 + 2] = value
 
             x = x + 1
         y = y + 1

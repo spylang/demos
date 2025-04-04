@@ -1,5 +1,6 @@
 name = "Bug"
-packages = ["numpy"]
+packages = ["numpy", "cffi", "./sobel_spy-0.0.0-cp312-cp312-pyodide_2024_0_wasm32.whl"]
 
 [files]
 "sobel_np.py" = ""
+"sobel_spy.py" = ""

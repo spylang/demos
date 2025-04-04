@@ -1,8 +1,12 @@
 import numpy as np
 from pyodide.ffi import to_js, create_proxy
 
+output_gray = None
+
 # preallocate output_gray
-output_gray = np.zeros((120, 160), dtype=np.uint8)
+def init(H, W):
+    global output_gray
+    output_gray = np.zeros((H, W), dtype=np.uint8)
 
 
 def sobel_np(buf, height, width, outbuf):

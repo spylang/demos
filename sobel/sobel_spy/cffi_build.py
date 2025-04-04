@@ -1,6 +1,5 @@
 import os
 from pathlib import Path
-
 from cffi import FFI
 
 ffibuilder = FFI()
@@ -17,8 +16,8 @@ void spy_sobel$sobel(uint8_t *frame, int32_t w, int32_t h, uint8_t *output);
 #define sobel spy_sobel$sobel
 """
 
-#SPY_ROOT = Path(os.environ["SPY_ROOT"]).absolute()
-SPY_ROOT = '/home/antocuni/anaconda/spy'
+SPY_ROOT = Path(os.environ["SPY_ROOT"]).absolute()
+
 
 if "PYODIDE_ABI_VERSION" in os.environ:
     # building for pyodide
@@ -35,8 +34,8 @@ ffibuilder.set_source(
         (f"SPY_TARGET_{TARGET.upper()}", None),
         ("SPY_RELEASE", None),
     ],
-    include_dirs=[f"{SPY_ROOT}/spy/libspy/include"],
-    library_dirs=[f"{SPY_ROOT}/spy/libspy/build/{TARGET}/release"],
+    include_dirs=[f"{SPY_ROOT}/libspy/include"],
+    library_dirs=[f"{SPY_ROOT}/libspy/build/{TARGET}/release"],
     #extra_compile_args = ['-O0', '-g'],
 )
 

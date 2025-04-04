@@ -57,22 +57,24 @@ def calculate_fps(timestamp):
 W, H = 400, 300
 W, H = 160, 120
 
+# preallocate input and output buffers
+buf = np.zeros(H*W*4, dtype=np.uint8)
+outbuf = np.zeros(H*W*4, dtype=np.uint8)
 
 def process_frame(timestamp):
     global animation_id
     calculate_fps(timestamp)
 
-    # Draw the current video frame to canvas
+    # Draw the current video frame to canvas and get image data
     original_ctx.drawImage(video, 0, 0, W, H)
-
-    # Get image data
     img_data = original_ctx.getImageData(0, 0, W, H)
-    buf = np.array(img_data.data)
+    np.copyto(buf, img_data.data, casting='unsafe')
 
-    buf2 = sobel_np(buf, H, W)
-    js_buf2 = Uint8ClampedArray.new(to_js(buf2))
-    img_data2 = ImageData.new(js_buf2, W, H)
-    processed_ctx.putImageData(img_data2, 0, 0)
+    sobel_np(buf, H, W, outbuf)
+
+    js_outbuf = Uint8ClampedArray.new(to_js(outbuf))
+    out_img_data = ImageData.new(js_outbuf, W, H)
+    processed_ctx.putImageData(out_img_data, 0, 0)
 
     # Continue the processing loop
     frame_proxy = create_proxy(process_frame)

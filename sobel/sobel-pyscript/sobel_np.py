@@ -1,28 +1,23 @@
 import numpy as np
 from pyodide.ffi import to_js, create_proxy
 
+# preallocate output_gray
+output_gray = np.zeros((120, 160), dtype=np.uint8)
 
 
-def sobel_np(buf, height, width):
+def sobel_np(buf, height, width, outbuf):
     pixels = buf.reshape((height, width, 4))
-
-    # Convert to grayscale for processing
-    gray = np.mean(pixels[:, :, :3], axis=2)
-    output_gray = np.zeros_like(gray)
+    gray = np.mean(pixels[:, :, :3], axis=2)  # convert to grayscale
 
     #apply_sobel(gray, height, width, output_gray)
-    output_gray[:] = gray
+    output_gray[:] = gray  # fake apply
 
     # convert output back to RGBA
-    output = np.zeros((height, width, 4), dtype=np.uint8)
+    output = outbuf.reshape((height, width, 4))
     output[:, :, 0] = output_gray
     output[:, :, 1] = output_gray
     output[:, :, 2] = output_gray
     output[:, :, 3] = 255  # Full opacity
-
-    flat_output = output.reshape(height*width*4)
-    return flat_output
-
 
 
 def apply_sobel(gray, height, width, output):

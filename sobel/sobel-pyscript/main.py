@@ -31,7 +31,7 @@ status_element = document.getElementById('status')
 high_contrast_checkbox = document.getElementById('highContrast')
 
 # Canvas contexts
-original_ctx = original_canvas.getContext('2d')
+original_ctx = original_canvas.getContext('2d', to_js({'willReadFrequently': True}))
 processed_ctx = processed_canvas.getContext('2d')
 
 stream = None

@@ -60,6 +60,7 @@ W, H = 160, 120
 # preallocate input and output buffers
 in_buf = np.zeros(H*W*4, dtype=np.uint8)
 out_buf = np.zeros(H*W*4, dtype=np.uint8)
+js_out_buf = Uint8ClampedArray.new(W*H*4)
 
 def process_frame(timestamp):
     global animation_id
@@ -72,12 +73,10 @@ def process_frame(timestamp):
     # copy img_data into the input buffer
     np.copyto(in_buf, in_img_data.data, casting='unsafe')
 
-    # actual processing
-    sobel_np(in_buf, H, W, out_buf)
+    #sobel_np(in_buf, H, W, out_buf)  # do sobel filter
+    js_out_buf.set(to_js(in_buf))    # fake filter, just copy bytes
 
-    # copy the pixels into the canvas using a complicated route, but I think
-    # it's the only possible way
-    js_out_buf = Uint8ClampedArray.new(to_js(out_buf))
+    # copy the pixels into the canvas
     out_img_data = ImageData.new(js_out_buf, W, H)
     processed_ctx.putImageData(out_img_data, 0, 0)
 

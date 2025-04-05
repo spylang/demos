@@ -1,34 +1,104 @@
-from unsafe import ptr
+from operator import OpImpl, OpArg
+from unsafe import gc_alloc, ptr
 from math import sqrt
 
-def sobel(frame: ptr[u8], w: int, h: int, output: ptr[u8]) -> void:
+# ====================== stdlib ====================
+#
+# This should be in "array.spy", but compilation of multiple modules doesn't
+# fully work yet
+
+@blue.generic
+def array3d(DTYPE):
+
+    @struct
+    class ArrayData:
+        h: i32
+        w: i32
+        d: i32
+        items: ptr[DTYPE]
+
+    @typelift
+    class ndarray:
+        __ll__: ptr[ArrayData]
+
+        def __new__(buf: ptr[DTYPE], h: i32, w: i32, d: i32) -> ndarray:
+            data = gc_alloc(ArrayData)(1)
+            data.h = h
+            data.w = w
+            data.d = d
+            data.items = buf
+            return ndarray.__lift__(data)
+
+        @blue
+        def __GETITEM__(v_arr: OpArg, v_i: OpArg, v_j: OpArg, v_k: OpArg) -> OpImpl:
+            def getitem(arr: ndarray, i: i32, j: i32, k: i32) -> DTYPE:
+                ll = arr.__ll__
+                if i >= ll.h:
+                    raise IndexError
+                if j >= ll.w:
+                    raise IndexError
+                if k >= ll.d:
+                    raise IndexError
+                idx = (i * ll.w * ll.d) + (j * ll.d) + k
+                return ll.items[idx]
+            return OpImpl(getitem)
+
+        @blue
+        def __SETITEM__(v_arr: OpArg, v_i: OpArg, v_j: OpArg, v_k: OpArg,
+                        v_v: OpArg) -> OpImpl:
+            def setitem(arr: ndarray, i: i32, j: i32, k: i32, v: DTYPE) -> void:
+                ll = arr.__ll__
+                if i >= ll.h:
+                    raise IndexError
+                if j >= ll.w:
+                    raise IndexError
+                if k >= ll.d:
+                    raise IndexError
+                idx = (i * ll.w * ll.d) + (j * ll.d) + k
+                ll.items[idx] = v
+            return OpImpl(setitem)
+
+    return ndarray
+
+
+# =========== main code =============
+
+def gray(frame: array3d[u8], x: int, y: int) -> f64:
+    # XXX: I don't understand why: if I return just a single channel
+    # everything is fast, if I do the proper average it becomes 50%
+    # slower. But it seems very weird that such a simple computation can make
+    # everything to slow.
+    return frame[x, y, 0] # fast
+    # slow
+    ## t: i32 = frame[x, y, 0] + frame[x, y, 1] + frame[x, y, 2]
+    ## return t / 3.0
+
+def sobel(in_buf: ptr[u8], h: int, w: int, out_buf: ptr[u8]) -> void:
+    frame = array3d[u8](in_buf, h, w, 3)
+    output = array3d[u8](out_buf, h, w, 3)
+
     y = 1
-    while y < h-1:
+    while y < w-1:
         x = 1
-        while x < w-1:
-            dx = (-1.0 * frame[(x-1) + w*(y-1)] +
-                   1.0 * frame[(x+1) + w*(y-1)] +
-                  -2.0 * frame[(x-1) + w*y    ] +
-                   2.0 * frame[(x+1) + w*y    ] +
-                  -1.0 * frame[(x-1) + w*(y+1)] +
-                   1.0 * frame[(x+1) + w*(y+1)])
+        while x < h-1:
+            dx = (-1.0 * gray(frame, x-1, y-1) +
+                   1.0 * gray(frame, x+1, y-1) +
+                  -2.0 * gray(frame, x-1, y  ) +
+                   2.0 * gray(frame, x+1, y  ) +
+                  -1.0 * gray(frame, x-1, y+1) +
+                   1.0 * gray(frame, x+1, y+1))
             #
-            dy = (-1.0 * frame[(x-1) + w*(y-1)] +
-                  -2.0 * frame[x     + w*(y-1)] +
-                  -1.0 * frame[(x+1) + w*(y-1)] +
-                   1.0 * frame[(x-1) + w*(y+1)] +
-                   2.0 * frame[x     + w*(y+1)] +
-                   1.0 * frame[(x+1) + w*(y+1)])
-            #
+            dy = (-1.0 * gray(frame, x-1, y-1) +
+                  -2.0 * gray(frame, x,   y-1) +
+                  -1.0 * gray(frame, x+1, y-1) +
+                   1.0 * gray(frame, x-1, y+1) +
+                   2.0 * gray(frame, x,   y+1) +
+                   1.0 * gray(frame, x+1, y+1))
+
             value = min(int(sqrt(dx*dx + dy*dy) / 2.0), 255)
-
-            # gray output
-            output[x + w*y] = value
-
-            # RGB output
-            ## output[(y*w + x) * 3 + 0] = value
-            ## output[(y*w + x) * 3 + 1] = value
-            ## output[(y*w + x) * 3 + 2] = value
+            output[x, y, 0] = value
+            output[x, y, 1] = value
+            output[x, y, 2] = value
 
             x = x + 1
         y = y + 1

@@ -1,10 +1,3 @@
-# /// script
-# dependencies = [
-#   "numpy",
-#   "opencv-python",
-# ]
-# ///
-
 import cv2
 import numpy as np
 import array
@@ -15,15 +8,14 @@ from collections import deque
 
 #from _sobel_cython import sobel
 #from _sobel_python import sobel
-import _sobel_spy
 
+import _sobel_spy
 def sobel(frame, output):
-    # temporary hack: the spy version expects a 2d grayscale, not a 3d RGB
-    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    h, w = frame.shape
+    h, w, d = frame.shape
+    assert d == 3
     ptr_frame = _sobel_spy.ffi.from_buffer(frame)
     ptr_output = _sobel_spy.ffi.from_buffer(output)
-    _sobel_spy.lib.sobel(ptr_frame, w, h, ptr_output)
+    _sobel_spy.lib.sobel(ptr_frame, h, w, ptr_output)
 
 
 def read_frames(source):

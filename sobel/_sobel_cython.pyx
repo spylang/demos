@@ -40,7 +40,7 @@ cpdef void sobel(unsigned char[:,:,:] frame, unsigned char[:,:,:] output):
             # Clamp values to 0-255 range
             if magnitude > 255:
                 magnitude = 255
-                if magnitude < 0:
+            if magnitude < 0:
                 magnitude = 0
 
             output[y, x, :] = <unsigned char>magnitude

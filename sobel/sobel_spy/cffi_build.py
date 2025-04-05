@@ -4,16 +4,15 @@ from cffi import FFI
 
 ffibuilder = FFI()
 
-ffibuilder.cdef(
-    """
-    void sobel(uint8_t *frame, int32_t w, int32_t h, uint8_t *output);
-    """
-)
+ffibuilder.cdef("""
+void sobel(uint8_t *frame, int32_t w, int32_t h, uint8_t *output, bool rgba);
+""")
 
 src = """
-void spy_sobel$sobel(uint8_t *frame, int32_t w, int32_t h, uint8_t *output);
+#include <stdbool.h>
 
 #define sobel spy_sobel$sobel
+void spy_sobel$sobel(uint8_t *frame, int32_t w, int32_t h, uint8_t *output, bool rgba);
 """
 
 SPY_ROOT = Path(os.environ["SPY_ROOT"]).absolute()

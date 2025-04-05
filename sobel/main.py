@@ -15,7 +15,8 @@ def sobel(frame, output):
     assert d == 3
     ptr_frame = _sobel_spy.ffi.from_buffer(frame)
     ptr_output = _sobel_spy.ffi.from_buffer(output)
-    _sobel_spy.lib.sobel(ptr_frame, h, w, ptr_output)
+    rgba = False
+    _sobel_spy.lib.sobel(ptr_frame, h, w, ptr_output, rgba)
 
 
 def read_frames(source):

@@ -10,8 +10,8 @@ from sobel_np import sobel_np, init as sobel_np_init
 from sobel_spy import sobel_spy, init as sobel_spy_init
 
 
-FILTER = 'spy'
-#FILTER = 'numpy'
+FILTER = 'SPy'
+#FILTER = 'Numpy'
 #FILTER = 'bypass'
 
 W, H = 400, 300
@@ -49,10 +49,7 @@ def update_status():
     if not stream:
         status_message = 'Camera inactive'
     else:
-        status_message = f'Processing: {fps} FPS'
-        if high_contrast:
-            status_message += ' (High contrast mode)'
-        status_message += ' - Using PyScript'
+        status_message = f'Processing: {fps} FPS - {FILTER}'
 
     status_element.textContent = status_message
 
@@ -79,9 +76,9 @@ def process_frame(timestamp):
     in_img_data = original_ctx.getImageData(0, 0, W, H)
 
     in_img_data.data.assign_to(in_buf)      # JS->WASM memcopy
-    if FILTER == 'numpy':
+    if FILTER == 'Numpy':
         sobel_np(in_buf, H, W, out_buf)
-    elif FILTER == 'spy':
+    elif FILTER == 'SPy':
         sobel_spy(in_buf, H, W, out_buf)
     else:
         pass # don't apply any filter
@@ -170,6 +167,8 @@ def toggle_contrast():
 
 # Initialize
 def init():
+    span = js.document.getElementById('filter')
+    span.innerText = FILTER
     stop_btn.disabled = True
     update_status()
     print("ready")

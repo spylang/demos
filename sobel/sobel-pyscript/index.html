@@ -101,8 +101,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>Real-time Edge Detection with PyScript</h1>
-            <p class="lead">Using Sobel operator for edge detection in your webcam feed</p>
+            <h3>Real-time image processing with PyScript</h3>
         </div>
 
         <div class="video-container">
@@ -111,7 +110,7 @@
                 <video id="video" width="400" height="300" autoplay muted></video>
             </div>
             <div class="video-box">
-                <h3 class="video-title">Edge Detection</h3>
+                <h3 class="video-title">Processed by <span id="filter"></span></h3>
                 <canvas id="processed" width="400" height="300"></canvas>
             </div>
         </div>
@@ -125,17 +124,10 @@
             </button>
 
             <div class="options">
-                <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="highContrast" py-change="toggle_contrast()">
-                    <label class="form-check-label" for="highContrast">High Contrast</label>
-                </div>
-                <div class="status" id="status">Ready to detect edges</div>
+              <div class="status" id="status">Loading...</div>
             </div>
         </div>
 
-        <div class="footer">
-            <p>Edge detection demonstrates computer vision techniques to identify boundaries in images</p>
-        </div>
     </div>
 
     <canvas id="original" width="400" height="300" style="display:none;"></canvas>

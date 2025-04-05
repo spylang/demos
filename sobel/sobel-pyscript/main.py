@@ -75,20 +75,23 @@ def process_frame(timestamp):
     original_ctx.drawImage(video, 0, 0, W, H)
     in_img_data = original_ctx.getImageData(0, 0, W, H)
 
-    # copy img_data into the input buffer
-    np.copyto(in_buf, in_img_data.data, casting='unsafe')
+    # sobel filter using numpy
+    #np.copyto(in_buf, in_img_data.data, casting='unsafe')
+    #sobel_np(in_buf, H, W, out_buf)
 
-    #sobel_np(in_buf, H, W, out_buf)  # sobel filter using numpy
-    sobel_spy(in_buf, H, W, out_buf)  # sobel filter using SPy
+    # sobel filter using SPy
+    in_buf = in_img_data.data.to_py()  # copy from JS to WASM memory
+    sobel_spy(in_buf, H, W, out_buf)
+    js_out_buf.assign(out_buf)         # copy from WASM memory to JS
 
-    # copy the pixels into the canvas
-    js_out_buf.set(to_js(out_buf))
+    # paint to canvas
     out_img_data = ImageData.new(js_out_buf, W, H)
     processed_ctx.putImageData(out_img_data, 0, 0)
 
     # Continue the processing loop
     frame_proxy = create_proxy(process_frame)
     animation_id = requestAnimationFrame(frame_proxy)
+
 
 # Start camera and processing
 @when("click", "#startBtn")

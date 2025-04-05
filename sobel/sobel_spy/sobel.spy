@@ -84,6 +84,11 @@ def sobel(in_buf: ptr[u8], h: int, w: int, out_buf: ptr[u8], rgba: bool) -> void
     while y < w-1:
         x = 1
         while x < h-1:
+            ## output[x, y, 0] = frame[x, y, 0]
+            ## output[x, y, 1] = frame[x, y, 1]
+            ## output[x, y, 2] = frame[x, y, 2]
+            ## output[x, y, 3] = frame[x, y, 3]
+
             dx = (-1.0 * gray(frame, x-1, y-1) +
                    1.0 * gray(frame, x+1, y-1) +
                   -2.0 * gray(frame, x-1, y  ) +

@@ -13,8 +13,8 @@ def sobel_np(buf, height, width, outbuf):
     pixels = buf.reshape((height, width, 4))
     gray = np.mean(pixels[:, :, :3], axis=2)  # convert to grayscale
 
-    #apply_sobel(gray, height, width, output_gray)
-    output_gray[:] = gray  # fake apply
+    apply_sobel(gray, height, width, output_gray)
+    #output_gray[:] = gray  # fake apply
 
     # convert output back to RGBA
     output = outbuf.reshape((height, width, 4))

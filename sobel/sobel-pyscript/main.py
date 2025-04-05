@@ -10,8 +10,11 @@ from sobel_np import sobel_np, init as sobel_np_init
 from sobel_spy import sobel_spy, init as sobel_spy_init
 
 
+FILTER = 'spy'
+#FILTER = 'numpy'
+#FILTER = 'bypass'
+
 W, H = 400, 300
-#W, H = 160, 120
 
 # preallocate input and output buffers
 in_buf = np.zeros(H*W*4, dtype=np.uint8)
@@ -61,7 +64,7 @@ def calculate_fps(timestamp):
 
     frame_count += 1
     if timestamp - last_time >= 1000:
-        fps = round((frame_count * 1000) / (timestamp - last_time))
+        fps = round((frame_count * 1000) / (timestamp - last_time), 2)
         frame_count = 0
         last_time = timestamp
         update_status()
@@ -75,18 +78,14 @@ def process_frame(timestamp):
     original_ctx.drawImage(video, 0, 0, W, H)
     in_img_data = original_ctx.getImageData(0, 0, W, H)
 
-    # sobel filter using numpy
-    #np.copyto(in_buf, in_img_data.data, casting='unsafe')
-    #sobel_np(in_buf, H, W, out_buf)
-
-    # sobel filter using SPy
-    in_buf = in_img_data.data.to_py()  # copy from JS to WASM memory
-    sobel_spy(in_buf, H, W, out_buf)
-    js_out_buf.assign(out_buf)         # copy from WASM memory to JS
-
-    # bypass
-    ## in_buf = in_img_data.data.to_py()  # copy from JS to WASM memory
-    ## js_out_buf.assign(in_buf)
+    in_img_data.data.assign_to(in_buf)      # JS->WASM memcopy
+    if FILTER == 'numpy':
+        sobel_np(in_buf, H, W, out_buf)
+    elif FILTER == 'spy':
+        sobel_spy(in_buf, H, W, out_buf)
+    else:
+        pass # don't apply any filter
+    js_out_buf.assign(out_buf)              # WASM->JS memcopy
 
     # paint to canvas
     out_img_data = ImageData.new(js_out_buf, W, H)

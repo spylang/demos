@@ -84,6 +84,10 @@ def process_frame(timestamp):
     sobel_spy(in_buf, H, W, out_buf)
     js_out_buf.assign(out_buf)         # copy from WASM memory to JS
 
+    # bypass
+    ## in_buf = in_img_data.data.to_py()  # copy from JS to WASM memory
+    ## js_out_buf.assign(in_buf)
+
     # paint to canvas
     out_img_data = ImageData.new(js_out_buf, W, H)
     processed_ctx.putImageData(out_img_data, 0, 0)

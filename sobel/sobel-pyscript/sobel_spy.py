@@ -10,4 +10,4 @@ def sobel_spy(in_buf, height, width, out_buf):
     rgba = True
     ptr_in_buf = ffi.from_buffer(in_buf)
     ptr_out_buf = ffi.from_buffer(out_buf)
-    _sobel_spy.lib.sobel(ptr_in_buf, width, height, ptr_out_buf, rgba)
+    _sobel_spy.lib.sobel(ptr_in_buf, height, width, ptr_out_buf, rgba)

@@ -101,25 +101,31 @@
 <body>
     <div class="container">
         <div class="header">
-            <h3>Real-time image processing with PyScript</h3>
+            <h3>Real-time image processing with PyScript and SPy</h3>
         </div>
 
-        <div class="video-container">
+<div class="video-container">
             <div class="video-box">
-                <h3 class="video-title">Original Feed</h3>
+                <h3 class="video-title">
+                  <button style="visibility:hidden" class="btn btn-primary">.</button>
+                  Original Feed
+                  <button style="visibility:hidden" class="btn btn-primary">.</button>
+                </h3>
+
+
                 <video id="video" width="400" height="300" autoplay muted></video>
             </div>
             <div class="video-box">
-                <h3 class="video-title">Processed by <span id="filter"></span></h3>
+                <h3 class="video-title">Processed by <span id="filter">Numpy</span> <button id="switchBtn" class="btn">🔄</button></h3>
                 <canvas id="processed" width="400" height="300"></canvas>
             </div>
         </div>
 
         <div class="controls">
-            <button id="startBtn" class="btn btn-primary">
+            <button id="startBtn" class="btn btn-primary" disabled>
               <i class="bi bi-camera-video"></i> Start Camera
             </button>
-            <button id="stopBtn" class="btn btn-danger" py-click="stop_camera">
+            <button id="stopBtn" class="btn btn-danger" disabled>
                 <i class="bi bi-stop-circle"></i> Stop Camera
             </button>
 

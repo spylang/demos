@@ -14,11 +14,6 @@ from sobel_spy import sobel_spy, init as sobel_spy_init
 FILTER = 'Numpy'
 #FILTER = 'bypass'
 
-if '?spy' in js.location.href.lower():
-    FILTER = 'SPy'
-elif '?numpy' in js.lower.href.lower():
-    FILTER = 'Numpy'
-
 W, H = 400, 300
 
 # preallocate input and output buffers
@@ -164,6 +159,18 @@ def stop_camera():
 
     update_status()
 
+@when("click", "#switchBtn")
+def switch():
+    global FILTER
+    if FILTER == "Numpy":
+        FILTER = "SPy"
+    else:
+        FILTER = "Numpy"
+    span = js.document.getElementById('filter')
+    span.innerText = FILTER
+
+
+
 # Toggle high contrast mode
 def toggle_contrast():
     global high_contrast
@@ -174,6 +181,7 @@ def toggle_contrast():
 def init():
     span = js.document.getElementById('filter')
     span.innerText = FILTER
+    start_btn.disabled = False
     stop_btn.disabled = True
     update_status()
     print("ready")

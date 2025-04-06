@@ -10,15 +10,20 @@ from sobel_np import sobel_np, init as sobel_np_init
 from sobel_spy import sobel_spy, init as sobel_spy_init
 
 
-FILTER = 'SPy'
-#FILTER = 'Numpy'
+#FILTER = 'SPy'
+FILTER = 'Numpy'
 #FILTER = 'bypass'
+
+if '?spy' in js.location.href.lower():
+    FILTER = 'SPy'
+elif '?numpy' in js.lower.href.lower():
+    FILTER = 'Numpy'
 
 W, H = 400, 300
 
 # preallocate input and output buffers
-in_buf = np.zeros(H*W*4, dtype=np.uint8)
-out_buf = np.zeros(H*W*4, dtype=np.uint8)
+in_buf = np.zeros((H, W, 4), dtype=np.uint8)
+out_buf = np.zeros((H, W, 4), dtype=np.uint8)
 js_out_buf = Uint8ClampedArray.new(W*H*4)
 sobel_spy_init(H, W)
 sobel_np_init(H, W)

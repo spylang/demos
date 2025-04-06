@@ -68,10 +68,11 @@ def gray(frame: array3d[u8], x: int, y: int) -> f64:
     # everything is fast, if I do the proper average it becomes 50%
     # slower. But it seems very weird that such a simple computation can make
     # everything so slow.
-    return frame[x, y, 0] # fast
+    return frame[x, y, 1] # fast
     # slow
-    ## t: i32 = frame[x, y, 0] + frame[x, y, 1] + frame[x, y, 2]
-    ## return t / 3.0
+    #t: i32 = frame[x, y, 0] + frame[x, y, 1] + frame[x, y, 2]
+    #return t / 3.0
+
 
 def sobel(in_buf: ptr[u8], h: int, w: int, out_buf: ptr[u8], rgba: bool) -> void:
     d = 3
@@ -98,7 +99,7 @@ def sobel(in_buf: ptr[u8], h: int, w: int, out_buf: ptr[u8], rgba: bool) -> void
                    2.0 * gray(frame, x,   y+1) +
                    1.0 * gray(frame, x+1, y+1))
 
-            value = min(int(sqrt(dx*dx + dy*dy) / 2.0), 255)
+            value = min(int(sqrt(dx*dx + dy*dy)), 255)
             output[x, y, 0] = value
             output[x, y, 1] = value
             output[x, y, 2] = value

@@ -16,12 +16,10 @@ FILTER = 'Numpy'
 
 W, H = 400, 300
 
-# preallocate input and output buffers
-in_buf = np.zeros((H, W, 4), dtype=np.uint8)
-out_buf = np.zeros((H, W, 4), dtype=np.uint8)
-js_out_buf = Uint8ClampedArray.new(W*H*4)
-sobel_spy_init(H, W)
-sobel_np_init(H, W)
+# input and output buffers - preallocated by start_video
+in_buf = None
+out_buf = None
+js_out_buf = None
 
 
 # Global variables
@@ -110,7 +108,28 @@ async def start_camera(ev):
 
         # Start processing when video is ready
         def on_load(ev):
+            global W, H, in_buf, out_buf, js_out_buf
             video.play()
+            vw = video.videoWidth
+            vh = video.videoHeight
+            print(f"Actual resolution: {vw}x{vh}")
+
+            aspect = vw / vh
+            max_w, max_h = 400, 300
+
+            if W / H > aspect:
+                # height is the limiting factor
+                W = int(H * aspect)
+            else:
+                H = int(W / aspect)
+
+            print(f"Adjusted size: {W}x{H}")
+
+            in_buf = np.zeros((H, W, 4), dtype=np.uint8)
+            out_buf = np.zeros((H, W, 4), dtype=np.uint8)
+            js_out_buf = Uint8ClampedArray.new(W*H*4)
+
+
             frame_proxy = create_proxy(process_frame)
             animation_id = requestAnimationFrame(frame_proxy)
             update_status()
@@ -126,8 +145,8 @@ async def start_camera(ev):
         "video": {
             ## "width": {"ideal": 640},
             ## "height": {"ideal": 480},
-            "width": {"ideal": 160},
-            "height": {"ideal": 120},
+            "width": {"ideal": W},
+            "height": {"ideal": H},
             "facingMode": "user"
         }
     }

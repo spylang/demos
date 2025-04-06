@@ -10,8 +10,8 @@ from sobel_np import sobel_np, init as sobel_np_init
 from sobel_spy import sobel_spy, init as sobel_spy_init
 
 
-#FILTER = 'SPy'
-FILTER = 'Numpy'
+#FILTER = 'spy'
+FILTER = 'numpy'
 #FILTER = 'bypass'
 
 W, H = 400, 300
@@ -74,9 +74,9 @@ def process_frame(timestamp):
     in_img_data = original_ctx.getImageData(0, 0, W, H)
 
     in_img_data.data.assign_to(in_buf)      # JS->WASM memcopy
-    if FILTER == 'Numpy':
+    if FILTER == 'numpy':
         sobel_np(in_buf, H, W, out_buf)
-    elif FILTER == 'SPy':
+    elif FILTER == 'spy':
         sobel_spy(in_buf, H, W, out_buf)
     else:
         pass # don't apply any filter
@@ -181,13 +181,14 @@ def stop_camera():
 @when("click", "#switchBtn")
 def switch():
     global FILTER
-    if FILTER == "Numpy":
-        FILTER = "SPy"
-    else:
-        FILTER = "Numpy"
     span = js.document.getElementById('filter')
-    span.innerText = FILTER
 
+    if FILTER == "numpy":
+        FILTER = "spy"
+        span.innerText = "SPy 🥸"
+    else:
+        FILTER = "numpy"
+        span.innerText = "numpy"
 
 
 # Toggle high contrast mode

@@ -69,15 +69,25 @@ def gray(frame: array3d[u8], x: int, y: int) -> f64:
     # slower. But it seems very weird that such a simple computation can make
     # everything so slow.
     return frame[x, y, 1] # fast
-    # slow
-    #t: i32 = frame[x, y, 0] + frame[x, y, 1] + frame[x, y, 2]
-    #return t / 3.0
+    #
+    # this is slow AND buggy: frame[...] is u8, so addition overflows and you
+    # get spurious borders. Maybe we should change spy semantics and say that
+    # u8+u8 -> i32?
+    ## t: i32 = frame[x, y, 0] + frame[x, y, 1] + frame[x, y, 2]
+    ## return t / 3.0
+    #
+    # this is mathematically correct, but still slow
+    ## r: i32 = frame[x, y, 0]
+    ## g: i32 = frame[x, y, 1]
+    ## b: i32 = frame[x, y, 2]
+    ## return (r+g+b) / 3.0
 
 
 def sobel(in_buf: ptr[u8], h: int, w: int, out_buf: ptr[u8], rgba: bool) -> void:
     d = 3
     if rgba:
         d = 4
+
     frame = array3d[u8](in_buf, h, w, d)
     output = array3d[u8](out_buf, h, w, d)
 
@@ -105,6 +115,36 @@ def sobel(in_buf: ptr[u8], h: int, w: int, out_buf: ptr[u8], rgba: bool) -> void
             output[x, y, 2] = value
             if rgba:
                 output[x, y, 3] = 255 # maximum opacity
+
+            x = x + 1
+        y = y + 1
+
+
+def blur(in_buf: ptr[u8], h: int, w: int, out_buf: ptr[u8], rgba: bool) -> void:
+    d = 3
+    if rgba:
+        d = 4
+
+    frame = array3d[u8](in_buf, h, w, d)
+    output = array3d[u8](out_buf, h, w, d)
+
+    y = 1
+    while y < w-1:
+        x = 1
+        while x < h-1:
+            r: f64 = frame[x, y, 0]
+            g: f64 = frame[x, y, 1]
+            b: f64 = frame[x, y, 2]
+            r_pct = r / (g+b)
+            if r_pct > 0.5:
+                g = r
+                b = r
+
+            output[x, y, 0] = int(r)
+            output[x, y, 1] = int(g)
+            output[x, y, 2] = int(b)
+            ## if rgba:
+            ##     output[x, y, 3] = 255 # maximum opacity
 
             x = x + 1
         y = y + 1

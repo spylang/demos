@@ -6,13 +6,17 @@ ffibuilder = FFI()
 
 ffibuilder.cdef("""
 void sobel(uint8_t *frame, int32_t w, int32_t h, uint8_t *output, bool rgba);
+void blur(uint8_t *frame, int32_t w, int32_t h, uint8_t *output, bool rgba);
 """)
 
 src = """
 #include <stdbool.h>
 
 #define sobel spy_sobel$sobel
+#define blur spy_sobel$blur
+
 void spy_sobel$sobel(uint8_t *frame, int32_t w, int32_t h, uint8_t *output, bool rgba);
+void spy_sobel$blur(uint8_t *frame, int32_t w, int32_t h, uint8_t *output, bool rgba);
 """
 
 SPY_ROOT = Path(os.environ["SPY_ROOT"]).absolute()

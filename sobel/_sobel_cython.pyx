@@ -27,9 +27,11 @@ cpdef void sobel(unsigned char[:,:,:] frame, unsigned char[:,:,:] output):
             for i in range(3):
                 for j in range(3):
                     # Simple grayscale conversion: average of RGB channels
-                    pixel_value = (frame[y+i-1, x+j-1, 0] +
-                                  frame[y+i-1, x+j-1, 1] +
-                                  frame[y+i-1, x+j-1, 2]) / 3.0
+                    ## pixel_value = (frame[y+i-1, x+j-1, 0] +
+                    ##               frame[y+i-1, x+j-1, 1] +
+                    ##               frame[y+i-1, x+j-1, 2]) / 3.0
+
+                    pixel_value = float(frame[y+i-1, x+j-1, 0])
 
                     gx += sobel_x[i][j] * pixel_value
                     gy += sobel_y[i][j] * pixel_value

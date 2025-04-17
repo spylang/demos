@@ -17,6 +17,7 @@ def sobel(frame, output):
     ptr_output = _sobel_spy.ffi.from_buffer(output)
     rgba = False
     _sobel_spy.lib.sobel(ptr_frame, h, w, ptr_output, rgba)
+    #_sobel_spy.lib.blur(ptr_frame, h, w, ptr_output, rgba)
 
 
 def read_frames(source):
@@ -31,6 +32,7 @@ def read_frames(source):
 
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    print(f'frame size: {width}x{height}')
 
     ## width = 80
     ## height = 60

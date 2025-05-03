@@ -41,4 +41,16 @@ Demonstrates:
 * Complex array algorithm.
 * Use of [fused types](https://cython.readthedocs.io/en/stable/src/userguide/fusedtypes.html) to automatically generate multiple specialized signatures of the same function.  (Similar to a C++ template function.)
 
+## SciPy
+
+Test scenario: Implementation of vector quantization, originally ported from C to Cython.
+
+Cython:
+  * [cython_vq.pyx](https://github.com/scipy/scipy/blob/7ecbcb8c2ebcbb8c87d2fc98a98bbc9f7e34f497/scipy/cluster/_vq.pyx#L5)
+SPy: *TBD*
+Demonstrates:
+* Heavy use of fused-type templating across many internal functions.
+* External C calls to BLAS functions.
+* NumPy array allocation.
+
 Note that all these Cython examples and test files are copyright their original authors with their original license.

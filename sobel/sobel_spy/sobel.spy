@@ -1,67 +1,11 @@
-from operator import OpImpl, OpArg
 from unsafe import gc_alloc, ptr
 from math import sqrt
-
-# ====================== stdlib ====================
-#
-# This should be in "array.spy", but compilation of multiple modules doesn't
-# fully work yet
+from array import array
 
 @blue.generic
 def array3d(DTYPE):
+    return array[DTYPE, 3]
 
-    @struct
-    class ArrayData:
-        h: i32
-        w: i32
-        d: i32
-        items: ptr[DTYPE]
-
-    @typelift
-    class ndarray:
-        __ll__: ptr[ArrayData]
-
-        def __new__(buf: ptr[DTYPE], h: i32, w: i32, d: i32) -> ndarray:
-            data = gc_alloc(ArrayData)(1)
-            data.h = h
-            data.w = w
-            data.d = d
-            data.items = buf
-            return ndarray.__lift__(data)
-
-        @blue
-        def __GETITEM__(v_arr: OpArg, v_i: OpArg, v_j: OpArg, v_k: OpArg) -> OpImpl:
-            def getitem(arr: ndarray, i: i32, j: i32, k: i32) -> DTYPE:
-                ll = arr.__ll__
-                if i >= ll.h:
-                    raise IndexError
-                if j >= ll.w:
-                    raise IndexError
-                if k >= ll.d:
-                    raise IndexError
-                idx = (i * ll.w * ll.d) + (j * ll.d) + k
-                return ll.items[idx]
-            return OpImpl(getitem)
-
-        @blue
-        def __SETITEM__(v_arr: OpArg, v_i: OpArg, v_j: OpArg, v_k: OpArg,
-                        v_v: OpArg) -> OpImpl:
-            def setitem(arr: ndarray, i: i32, j: i32, k: i32, v: DTYPE) -> void:
-                ll = arr.__ll__
-                if i >= ll.h:
-                    raise IndexError
-                if j >= ll.w:
-                    raise IndexError
-                if k >= ll.d:
-                    raise IndexError
-                idx = (i * ll.w * ll.d) + (j * ll.d) + k
-                ll.items[idx] = v
-            return OpImpl(setitem)
-
-    return ndarray
-
-
-# =========== main code =============
 
 def gray(frame: array3d[u8], x: int, y: int) -> f64:
     # XXX: I don't understand why: if I return just a single channel
@@ -83,13 +27,13 @@ def gray(frame: array3d[u8], x: int, y: int) -> f64:
     ## return (r+g+b) / 3.0
 
 
-def sobel(in_buf: ptr[u8], h: int, w: int, out_buf: ptr[u8], rgba: bool) -> void:
+def sobel(in_buf: ptr[u8], h: int, w: int, out_buf: ptr[u8], rgba: bool) -> None:
     d = 3
     if rgba:
         d = 4
 
-    frame = array3d[u8](in_buf, h, w, d)
-    output = array3d[u8](out_buf, h, w, d)
+    frame = array3d[u8].from_buffer(in_buf, h, w, d)
+    output = array3d[u8].from_buffer(out_buf, h, w, d)
 
     y = 1
     while y < w-1:
@@ -120,13 +64,13 @@ def sobel(in_buf: ptr[u8], h: int, w: int, out_buf: ptr[u8], rgba: bool) -> void
         y = y + 1
 
 
-def blur(in_buf: ptr[u8], h: int, w: int, out_buf: ptr[u8], rgba: bool) -> void:
+def blur(in_buf: ptr[u8], h: int, w: int, out_buf: ptr[u8], rgba: bool) -> None:
     d = 3
     if rgba:
         d = 4
 
-    frame = array3d[u8](in_buf, h, w, d)
-    output = array3d[u8](out_buf, h, w, d)
+    frame = array3d[u8].from_buffer(in_buf, h, w, d)
+    output = array3d[u8].from_buffer(out_buf, h, w, d)
 
     y = 1
     while y < w-1:

@@ -31,7 +31,7 @@ else:
 ffibuilder.set_source(
     "_sobel_spy",
     src,
-    sources=["build/sobel.c"],
+    sources=["build/src/sobel.c", "build/src/array.c"],
     libraries=["spy"],
     define_macros=[
         (f"SPY_TARGET_{TARGET.upper()}", None),

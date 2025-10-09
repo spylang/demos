@@ -1,0 +1,268 @@
+#!/usr/bin/env spy
+"""Simple ASCII raytracer with ANSI color support"""
+
+from math import sqrt, tan, pi
+from _range import range
+from _list import List
+from unsafe import gc_alloc, ptr
+from __spy__ import is_compiled
+from os import get_terminal_size
+
+
+@struct
+class Vec3:
+    x: f64
+    y: f64
+    z: f64
+
+    def add(self: Vec3, other: Vec3) -> Vec3:
+        return Vec3(self.x + other.x, self.y + other.y, self.z + other.z)
+
+    def sub(self: Vec3, other: Vec3) -> Vec3:
+        return Vec3(self.x - other.x, self.y - other.y, self.z - other.z)
+
+    def mul(self: Vec3, scalar: f64) -> Vec3:
+        return Vec3(self.x * scalar, self.y * scalar, self.z * scalar)
+
+    def dot(self: Vec3, other: Vec3) -> f64:
+        return self.x * other.x + self.y * other.y + self.z * other.z
+
+    def length(self: Vec3) -> f64:
+        return sqrt(self.dot(self))
+
+    def normalize(self: Vec3) -> Vec3:
+        length_val = self.length()
+        return Vec3(self.x / length_val, self.y / length_val, self.z / length_val)
+
+
+@struct
+class Ray:
+    origin: Vec3
+    direction: Vec3
+
+
+@struct
+class Color:
+    r: f64
+    g: f64
+    b: f64
+
+
+@struct
+class HitRecord:
+    point: Vec3
+    normal: Vec3
+    t: f64
+    color: Color
+    valid: i32  # 0 = no hit, 1 = hit
+
+
+@struct
+class Sphere:
+    center: Vec3
+    radius: f64
+    color: Color
+
+    def intersect(self: Sphere, ray: Ray) -> HitRecord:
+        oc = ray.origin.sub(self.center)
+        a = ray.direction.dot(ray.direction)
+        b = 2.0 * oc.dot(ray.direction)
+        c = oc.dot(oc) - self.radius * self.radius
+        discriminant = b * b - 4.0 * a * c
+
+        if discriminant < 0.0:
+            return HitRecord(
+                Vec3(0.0, 0.0, 0.0),
+                Vec3(0.0, 0.0, 0.0),
+                0.0,
+                Color(0.0, 0.0, 0.0),
+                0
+            )
+
+        t = (-b - sqrt(discriminant)) / (2.0 * a)
+        if t < 0.001:
+            return HitRecord(
+                Vec3(0.0, 0.0, 0.0),
+                Vec3(0.0, 0.0, 0.0),
+                0.0,
+                Color(0.0, 0.0, 0.0),
+                0
+            )
+
+        point = ray.origin.add(ray.direction.mul(t))
+        normal = point.sub(self.center).normalize()
+        return HitRecord(point, normal, t, self.color, 1)
+
+
+@struct
+class Plane:
+    point: Vec3
+    normal_vec: Vec3
+    color: Color
+
+    def intersect(self: Plane, ray: Ray) -> HitRecord:
+        denom = self.normal_vec.dot(ray.direction)
+        abs_denom = denom
+        if abs_denom < 0.0:
+            abs_denom = -abs_denom
+
+        if abs_denom < 0.0001:
+            return HitRecord(
+                Vec3(0.0, 0.0, 0.0),
+                Vec3(0.0, 0.0, 0.0),
+                0.0,
+                Color(0.0, 0.0, 0.0),
+                0
+            )
+
+        t = self.point.sub(ray.origin).dot(self.normal_vec) / denom
+        if t < 0.001:
+            return HitRecord(
+                Vec3(0.0, 0.0, 0.0),
+                Vec3(0.0, 0.0, 0.0),
+                0.0,
+                Color(0.0, 0.0, 0.0),
+                0
+            )
+
+        hit_point = ray.origin.add(ray.direction.mul(t))
+
+        # Checkerboard pattern
+        checker_size = 2.0
+        px = i32(hit_point.x / checker_size)
+        pz = i32(hit_point.z / checker_size)
+        if (px + pz) % 2 == 0:
+            col = Color(0.9, 0.9, 0.9)
+        else:
+            col = self.color
+
+        return HitRecord(hit_point, self.normal_vec, t, col, 1)
+
+
+@struct
+class Object:
+    obj_type: i32  # 0 = sphere, 1 = plane
+    sphere: Sphere
+    plane: Plane
+
+    def intersect(self: Object, ray: Ray) -> HitRecord:
+        if self.obj_type == 0:
+            return self.sphere.intersect(ray)
+        else:
+            return self.plane.intersect(ray)
+
+
+def trace_ray(ray: Ray, objects: List[Object], light_dir: Vec3) -> Color:
+    closest_hit = HitRecord(
+        Vec3(0.0, 0.0, 0.0),
+        Vec3(0.0, 0.0, 0.0),
+        0.0,
+        Color(0.0, 0.0, 0.0),
+        0
+    )
+    closest_t = 1e10
+
+    obj_count = len(objects)
+    for i in range(obj_count):
+        obj = objects[i]
+        hit = obj.intersect(ray)
+        if hit.valid == 1:
+            if hit.t < closest_t:
+                closest_hit = hit
+                closest_t = hit.t
+
+    if closest_hit.valid == 0:
+        # Sky gradient
+        t = 0.5 * (ray.direction.y + 1.0)
+        return Color(0.5 + 0.5 * t, 0.7 + 0.3 * t, 1.0)
+
+    # Simple diffuse lighting
+    light_intensity = closest_hit.normal.dot(light_dir)
+    if light_intensity < 0.0:
+        light_intensity = 0.0
+
+    # Ambient + diffuse
+    ambient = 0.2
+    total_intensity = ambient + (1.0 - ambient) * light_intensity
+
+    # Apply color
+    rval = closest_hit.color.r * total_intensity
+    gval = closest_hit.color.g * total_intensity
+    bval = closest_hit.color.b * total_intensity
+
+    return Color(rval, gval, bval)
+
+
+def min_f64(a: f64, b: f64) -> f64:
+    if a < b:
+        return a
+    else:
+        return b
+
+
+def render(width: i32, height: i32) -> None:
+    # Scene setup
+    objects = List[Object]()
+
+    # Red sphere
+    sphere1 = Sphere(Vec3(0.0, 0.0, -5.0), 1.5, Color(1.0, 0.3, 0.3))
+    obj1 = Object(0, sphere1, Plane(Vec3(0.0, 0.0, 0.0), Vec3(0.0, 1.0, 0.0), Color(0.0, 0.0, 0.0)))
+    objects.append(obj1)
+
+    # Green sphere
+    sphere2 = Sphere(Vec3(-2.0, -0.5, -4.0), 0.8, Color(0.3, 1.0, 0.3))
+    obj2 = Object(0, sphere2, Plane(Vec3(0.0, 0.0, 0.0), Vec3(0.0, 1.0, 0.0), Color(0.0, 0.0, 0.0)))
+    objects.append(obj2)
+
+    # Blue sphere
+    sphere3 = Sphere(Vec3(2.5, -0.3, -6.0), 1.0, Color(0.3, 0.3, 1.0))
+    obj3 = Object(0, sphere3, Plane(Vec3(0.0, 0.0, 0.0), Vec3(0.0, 1.0, 0.0), Color(0.0, 0.0, 0.0)))
+    objects.append(obj3)
+
+    # Ground plane
+    plane1 = Plane(Vec3(0.0, -1.5, 0.0), Vec3(0.0, 1.0, 0.0), Color(0.7, 0.7, 0.7))
+    obj4 = Object(1, Sphere(Vec3(0.0, 0.0, 0.0), 0.0, Color(0.0, 0.0, 0.0)), plane1)
+    objects.append(obj4)
+
+    light_dir = Vec3(0.5, 1.0, 0.3).normalize()
+    camera_pos = Vec3(0.0, 0.0, 0.0)
+
+    aspect_ratio = f64(width) / f64(height)
+    fov = pi / 3.0
+
+    for py in range(height):
+        line = ""
+        for px in range(width):
+            # Calculate ray direction
+            px_norm = (2.0 * (f64(px) + 0.5) / f64(width) - 1.0) * aspect_ratio * tan(fov / 2.0)
+            py_norm = (1.0 - 2.0 * (f64(py) + 0.5) / f64(height)) * tan(fov / 2.0)
+
+            direction = Vec3(px_norm, py_norm, -1.0).normalize()
+            ray = Ray(camera_pos, direction)
+
+            # Trace ray
+            color = trace_ray(ray, objects, light_dir)
+
+            # Convert to 8-bit color
+            r_int = i32(min_f64(255.0, color.r * 255.0))
+            g_int = i32(min_f64(255.0, color.g * 255.0))
+            b_int = i32(min_f64(255.0, color.b * 255.0))
+
+            # Build line with ANSI 24-bit color escape code
+            line = line + "\033[48;2;" + str(r_int) + ";" + str(g_int) + ";" + str(b_int) + "m "
+
+        # Reset color at end of line and print
+        line = line + "\033[0m"
+        print(line)
+
+
+def main() -> None:
+    if is_compiled():
+        size = get_terminal_size()
+        width = size.columns
+        height = size.lines
+    else:
+        width = 20
+        height = 5
+
+    render(width, height)

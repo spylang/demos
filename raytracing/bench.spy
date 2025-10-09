@@ -1,6 +1,7 @@
 #!/usr/bin/env spy
 """Benchmark for the raytracer rendering engine"""
 
+import __spy__
 from math import sqrt, tan, pi
 from time import time
 from _range import range
@@ -233,7 +234,11 @@ def render_frame(width: i32, height: i32, ball_pos: Vec3) -> None:
 def benchmark() -> None:
     width = 80
     height = 30
-    num_frames = 5000
+
+    if __spy__.is_compiled():
+        num_frames = 5000
+    else:
+        num_frames = 1
 
     print("Benchmarking raytracer...")
     print("Resolution: " + str(width) + "x" + str(height))
@@ -243,10 +248,11 @@ def benchmark() -> None:
     print("")
 
     # Warm up
-    print("Warming up...")
-    for warmup_i in range(5):
-        ball_pos = Vec3(-2.0 + f64(warmup_i) * 0.5, 0.0, -4.0)
-        render_frame(width, height, ball_pos)
+    if __spy__.is_compiled():
+        print("Warming up...")
+        for warmup_i in range(5):
+            ball_pos = Vec3(-2.0 + f64(warmup_i) * 0.5, 0.0, -4.0)
+            render_frame(width, height, ball_pos)
 
     # Benchmark
     print("Running benchmark...")

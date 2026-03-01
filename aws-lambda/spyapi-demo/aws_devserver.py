@@ -153,10 +153,11 @@ def start(handler_class, host, port, label):
 
 def main():
     if len(sys.argv) < 2:
-        print(f"Usage: {sys.argv[0]} <binary> [--port PORT] [--runtime-port PORT]")
+        print(f"Usage: {sys.argv[0]} <binary>|--no-launch [--port PORT] [--runtime-port PORT]")
         sys.exit(1)
 
     binary = sys.argv[1]
+    no_launch = binary == "--no-launch"
     port = 8080
     runtime_port = 9001
 
@@ -173,6 +174,14 @@ def main():
 
     env = {**os.environ, "AWS_LAMBDA_RUNTIME_API": f"127.0.0.1:{runtime_port}"}
     print(f"Open http://localhost:{port}/")
+
+    if no_launch:
+        print(f"Run the binary with: AWS_LAMBDA_RUNTIME_API=127.0.0.1:{runtime_port} <binary>")
+        try:
+            threading.Event().wait()
+        except KeyboardInterrupt:
+            pass
+        return
 
     while True:
         print(f"Starting: {binary}", flush=True)

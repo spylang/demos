@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
-# Compile demo.spy, package the binary, and deploy to Lambda.
+# Package and deploy updated code to Lambda.
 # Flags (used internally by aws_setup.sh):
 #   --package-only   build function.zip but don't push
-#   --deploy-only    push existing function.zip without recompiling
+#   --deploy-only    push existing function.zip without rebuilding
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/_config.sh"
-
-SPY="spy"
 
 PACKAGE_ONLY=false
 DEPLOY_ONLY=false
@@ -18,18 +16,21 @@ for arg in "$@"; do
     esac
 done
 
-# ── compile ───────────────────────────────────────────────────────────────────
+# ── package ───────────────────────────────────────────────────────────────────
 if ! $DEPLOY_ONLY; then
-    echo "==> Compiling"
+    echo "==> Packaging"
 
-    echo "  Running spy build demo.spy..."
-    cd "$SCRIPT_DIR"
-    "$SPY" build --static --release demo.spy
+    PACKAGE_DIR="$SCRIPT_DIR/.package"
+    rm -rf "$PACKAGE_DIR"
+    mkdir -p "$PACKAGE_DIR"
 
-    echo "  Packaging..."
-    cp build/demo "$SCRIPT_DIR/bootstrap"
-    (cd "$SCRIPT_DIR" && zip -q -j function.zip bootstrap)
-    rm -f "$SCRIPT_DIR/bootstrap"
+    echo "  Installing dependencies..."
+    pip install -q -r "$SCRIPT_DIR/requirements.txt" -t "$PACKAGE_DIR"
+
+    cp "$SCRIPT_DIR/main.py" "$PACKAGE_DIR/"
+
+    echo "  Zipping..."
+    (cd "$PACKAGE_DIR" && zip -q -r "$SCRIPT_DIR/function.zip" .)
 
     SIZE=$(du -sh "$SCRIPT_DIR/function.zip" | cut -f1)
     echo "✓ function.zip ready ($SIZE)"

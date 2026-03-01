@@ -1,12 +1,6 @@
-from aws import (
-    lambda_init,
-    lambda_next_body,
-    lambda_next_method,
-    lambda_next_path,
-    lambda_next_query_string,
-    response,
-)
-from spyapi import App, dispatch
+from spyapi import SPyAPI
+
+app = SPyAPI()
 
 STYLE: str = """
 <style>
@@ -50,8 +44,6 @@ STYLE: str = """
 </style>
 """
 
-app = App()
-
 
 @app.get("/")
 def index() -> None:
@@ -75,12 +67,12 @@ def index() -> None:
     </div>
   </body>
 </html>"""
-    response(200, html, "text/html; charset=utf-8")
+    app.response(200, html, "text/html; charset=utf-8")
 
 
 @app.get("/greet")
 def greet() -> None:
-    name = lambda_next_query_string()
+    name = app.get_query_string()
     html = f"""<!doctype html>
 <html>
   <head>
@@ -96,7 +88,7 @@ def greet() -> None:
     </div>
   </body>
 </html>"""
-    response(200, html, "text/html; charset=utf-8")
+    app.response(200, html, "text/html; charset=utf-8")
 
 
 @app.get("/about")
@@ -119,13 +111,8 @@ def about() -> None:
     </div>
   </body>
 </html>"""
-    response(200, html, "text/html; charset=utf-8")
+    app.response(200, html, "text/html; charset=utf-8")
 
 
 def main() -> None:
-    lambda_init()
-    while True:
-        body = lambda_next_body()
-        method = lambda_next_method()
-        path = lambda_next_path()
-        dispatch(method, path)
+    app.serve_forever()

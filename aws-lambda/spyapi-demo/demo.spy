@@ -55,7 +55,7 @@ app = App()
 
 @app.get("/")
 def index() -> None:
-    html: str = f"""<!doctype html>
+    html = f"""<!doctype html>
 <html>
   <head>
     {STYLE}
@@ -80,8 +80,8 @@ def index() -> None:
 
 @app.get("/greet")
 def greet() -> None:
-    name: str = lambda_next_query_string()
-    html: str = f"""<!doctype html>
+    name = lambda_next_query_string()
+    html = f"""<!doctype html>
 <html>
   <head>
     {STYLE}
@@ -101,7 +101,7 @@ def greet() -> None:
 
 @app.get("/about")
 def about() -> None:
-    html: str = f"""<!doctype html>
+    html = f"""<!doctype html>
 <html>
   <head>
     {STYLE}
@@ -125,7 +125,7 @@ def about() -> None:
 def main() -> None:
     lambda_init()
     while True:
-        body: str = lambda_next_body()
-        method: str = lambda_next_method()
-        path: str = lambda_next_path()
+        body = lambda_next_body()
+        method = lambda_next_method()
+        path = lambda_next_path()
         dispatch(method, path)

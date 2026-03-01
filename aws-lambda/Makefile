@@ -32,7 +32,7 @@ benchmark: ## Run cold-start + warm-latency + throughput benchmark; saves benchm
 	bash benchmark.sh
 
 plot: ## Plot benchmark_results.json → benchmark_results.png
-	python3 plot_benchmark.py benchmark_results.json
+	uv run plot_benchmark.py benchmark_results.json
 
 # ── teardown ───────────────────────────────────────────────────────────────────
 

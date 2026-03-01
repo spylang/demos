@@ -99,7 +99,7 @@ parse_hey() {
 # Parse a "n=X min=X p50=X p95=X max=X avg=X" line into prefixed global vars.
 parse_cw_line() {
     local pfx="$1" line="$2"
-    printf -v "${pfx}_n"      '%s' "$(echo "$line" | grep -oP '(?<=n=)\d+'      || true)"
+    printf -v "${pfx}_n"      '%s' "$(echo "$line" | grep -oP '^n=\K\d+'         || true)"
     printf -v "${pfx}_min_ms" '%s' "$(echo "$line" | grep -oP '(?<=min=)[\d.]+' || true)"
     printf -v "${pfx}_p50_ms" '%s' "$(echo "$line" | grep -oP '(?<=p50=)[\d.]+' || true)"
     printf -v "${pfx}_p95_ms" '%s' "$(echo "$line" | grep -oP '(?<=p95=)[\d.]+' || true)"
@@ -117,7 +117,7 @@ measure_cold_start() {
     curl -s -o /dev/null "$url"
     local wall=$(( $(date +%s%3N) - t0 ))
 
-    sleep 3
+    sleep 5
 
     local report
     report=$(aws logs filter-log-events \

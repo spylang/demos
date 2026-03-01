@@ -4,6 +4,7 @@ from aws import (
     lambda_next_method,
     lambda_next_path,
     lambda_next_query_string,
+    lambda_next_get_query_param,
     response as aws_response,
 )
 from __spy__ import interp_list, interp_tuple, UNROLL_RANGE
@@ -34,6 +35,9 @@ class SPyAPI:
 
     def get_query_string(self) -> str:
         return lambda_next_query_string()
+
+    def get_query_param(self, key: str) -> str:
+        return lambda_next_get_query_param(key)
 
     def response(self, status: int, body: str, mime_type: str) -> None:
         aws_response(status, body, mime_type)

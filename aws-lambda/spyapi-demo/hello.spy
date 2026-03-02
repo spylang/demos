@@ -1,24 +1,17 @@
-from aws import (lambda_init, lambda_next_body, lambda_next_method,
-                  lambda_next_path, lambda_next_query_string, response)
-from spyapi import App, dispatch
+from spyapi import SPyAPI
 
-app = App()
+app = SPyAPI()
 
 @app.get("/")
 def index() -> None:
-    response(200, '{"message": "Hello from SPy!"}', 'application/json')
+    app.response(200, '{"message": "Hello from SPy!"}', 'application/json')
 
 
 @app.get("/login")
 def login() -> None:
-    qs: str = lambda_next_query_string()
-    response(200, f'{{"message": "Hello from login, query={qs}"}}', 'application/json')
+    user: str = app.get_query_param("user")
+    app.response(200, f'{{"message": "Hello from login, user={user}"}}', 'application/json')
 
 
 def main() -> None:
-    lambda_init()
-    while True:
-        body: str = lambda_next_body()
-        method: str = lambda_next_method()
-        path: str = lambda_next_path()
-        dispatch(method, path)
+    app.serve_forever()

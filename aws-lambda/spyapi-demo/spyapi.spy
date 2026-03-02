@@ -1,0 +1,82 @@
+from aws import (
+    lambda_init,
+    lambda_next_body,
+    lambda_next_method,
+    lambda_next_path,
+    lambda_next_query_string,
+    lambda_next_get_query_param,
+    response as aws_response,
+)
+from __spy__ import interp_list, interp_tuple, UNROLL_RANGE
+
+ROUTES: interp_list[interp_tuple] = interp_list[interp_tuple]()
+
+@struct
+class SPyAPI:
+
+    @blue
+    def get(self, path: str):
+        @blue
+        def decorator(fn):
+            ROUTES.append(interp_tuple("GET", path, fn))
+            return fn
+
+        return decorator
+
+    @blue
+    def post(self, path: str):
+        @blue
+        def decorator(fn):
+            ROUTES.append(interp_tuple("POST", path, fn))
+            return fn
+
+        return decorator
+
+
+    def get_query_string(self) -> str:
+        return lambda_next_query_string()
+
+    def get_query_param(self, key: str) -> str:
+        return lambda_next_get_query_param(key)
+
+    def response(self, status: int, body: str, mime_type: str) -> None:
+        aws_response(status, body, mime_type)
+
+    def serve_forever(self) -> None:
+        lambda_init()
+        while True:
+            body = lambda_next_body()
+            method = lambda_next_method()
+            path = lambda_next_path()
+            dispatch(method, path)
+
+
+@blue
+def get_method(i):
+    method, path, fn = ROUTES[i]
+    return method
+
+@blue
+def get_path(i):
+    method, path, fn = ROUTES[i]
+    return path
+
+@blue
+def get_fn(i):
+    method, path, fn = ROUTES[i]
+    return fn
+
+@blue
+def get_n():
+    return len(ROUTES)
+
+def dispatch(req_method: str, req_path: str) -> None:
+    for i in UNROLL_RANGE(get_n()):
+        const method = get_method(i)
+        const path = get_path(i)
+        const fn = get_fn(i)
+        if req_method == method and path == req_path:
+            fn()
+            return
+
+    aws_response(404, '{"message": "Not Found"}', 'application/json')

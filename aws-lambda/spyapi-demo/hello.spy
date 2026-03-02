@@ -1,0 +1,17 @@
+from spyapi import SPyAPI
+
+app = SPyAPI()
+
+@app.get("/")
+def index() -> None:
+    app.response(200, '{"message": "Hello from SPy!"}', 'application/json')
+
+
+@app.get("/greet")
+def login() -> None:
+    user: str = app.get_query_param("user")
+    app.response(200, f'{{"message": "Hello user"}}', 'application/json')
+
+
+def main() -> None:
+    app.serve_forever()

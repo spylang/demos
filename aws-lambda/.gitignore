@@ -1,0 +1,9 @@
+# Build artifacts
+fastapi-demo/.package/
+fastapi-demo/function.zip
+spyapi-demo/build/
+spyapi-demo/bootstrap
+spyapi-demo/function.zip
+
+# Benchmark output
+benchmark_results.json

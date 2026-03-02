@@ -72,4 +72,18 @@ See [DEPLOY.md](./DEPLOY.md).
 
 ## Benchmarks
 
+The following chart compares the performance of the SPy and the FastAPI versions. The
+most impressive improvement is the cold start latency, where SPy is ~60-80x lower than
+CPython+FastAPI: this is due to a combination of reasons:
+
+  - being a statically linked, the executable can start immediately without having to
+    initialize the CPython interpreter;
+
+  - on CPython, all the `import`s happen at startup. In SPy, all the `import`s are
+    resolved and executed at compile time;
+
+  - on CPython, the `@app.get()` decorators and more in general the FastAPI-specific
+    initialization logic run at runtime. On SPy, all the logic is `blue` and
+    pre-evaluated at compile time.
+
 ![SPy vs FastAPI — AWS Lambda Benchmark](benchmark_results.png)

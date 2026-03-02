@@ -7,10 +7,10 @@ def index() -> None:
     app.response(200, '{"message": "Hello from SPy!"}', 'application/json')
 
 
-@app.get("/login")
+@app.get("/greet")
 def login() -> None:
     user: str = app.get_query_param("user")
-    app.response(200, f'{{"message": "Hello from login, user={user}"}}', 'application/json')
+    app.response(200, f'{{"message": "Hello user"}}', 'application/json')
 
 
 def main() -> None:

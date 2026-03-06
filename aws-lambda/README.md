@@ -86,4 +86,8 @@ CPython+FastAPI: this is due to a combination of reasons:
     initialization logic run at runtime. On SPy, all the logic is `blue` and
     pre-evaluated at compile time.
 
-![SPy vs FastAPI — AWS Lambda Benchmark](benchmark_results.png)
+![SPy vs FastAPI — AWS Lambda Benchmark](spy_fastapi.png)
+
+Moreover, here is a comparison of SPy vs [Go](./go-demo) vs [Rust](./rust-demo):
+
+![SPy vs Go vs Rust — AWS Lambda Benchmark](spy_go_rust.png)

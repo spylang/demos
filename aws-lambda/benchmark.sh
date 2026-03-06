@@ -15,6 +15,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Override via environment variables if you used different names during setup.
 SPY_FUNCTION="${SPY_FUNCTION:-spyapi-demo}"
 FASTAPI_FUNCTION="${FASTAPI_FUNCTION:-fastapi-demo}"
+GO_FUNCTION="${GO_FUNCTION:-go-demo}"
+RUST_FUNCTION="${RUST_FUNCTION:-rust-demo}"
 REGION="${REGION:-us-east-1}"
 
 WARMUP_N=10
@@ -54,8 +56,12 @@ echo
 echo "==> Looking up Function URLs..."
 SPY_URL=$(get_url "$SPY_FUNCTION")
 FASTAPI_URL=$(get_url "$FASTAPI_FUNCTION")
-info "SPy     ($SPY_FUNCTION):  $SPY_URL"
+GO_URL=$(get_url "$GO_FUNCTION")
+RUST_URL=$(get_url "$RUST_FUNCTION")
+info "SPy     ($SPY_FUNCTION):     $SPY_URL"
 info "FastAPI ($FASTAPI_FUNCTION): $FASTAPI_URL"
+info "Go      ($GO_FUNCTION):      $GO_URL"
+info "Rust    ($RUST_FUNCTION):    $RUST_URL"
 
 s_to_ms() {
     # Convert a float-seconds string to milliseconds (2 decimal places).
@@ -186,7 +192,7 @@ measure_throughput() {
 # ── main ───────────────────────────────────────────────────────────────────────
 echo
 echo "╔══════════════════════════════════════════════════════════╗"
-echo "║         SPy Native Binary  vs  FastAPI + CPython         ║"
+echo "║        SPy  vs  FastAPI  vs  Go  vs  Rust               ║"
 echo "╚══════════════════════════════════════════════════════════╝"
 
 hr
@@ -197,6 +203,12 @@ measure_cold_start spy "$SPY_FUNCTION" "$SPY_URL"
 echo
 echo "[ FastAPI ($FASTAPI_FUNCTION) ]"
 measure_cold_start fastapi "$FASTAPI_FUNCTION" "$FASTAPI_URL"
+echo
+echo "[ Go ($GO_FUNCTION) ]"
+measure_cold_start go "$GO_FUNCTION" "$GO_URL"
+echo
+echo "[ Rust ($RUST_FUNCTION) ]"
+measure_cold_start rust "$RUST_FUNCTION" "$RUST_URL"
 
 hr
 echo "WARM LATENCY"
@@ -206,6 +218,12 @@ measure_warm spy "$SPY_FUNCTION" "$SPY_URL"
 echo
 echo "[ FastAPI ($FASTAPI_FUNCTION) ]"
 measure_warm fastapi "$FASTAPI_FUNCTION" "$FASTAPI_URL"
+echo
+echo "[ Go ($GO_FUNCTION) ]"
+measure_warm go "$GO_FUNCTION" "$GO_URL"
+echo
+echo "[ Rust ($RUST_FUNCTION) ]"
+measure_warm rust "$RUST_FUNCTION" "$RUST_URL"
 
 hr
 echo "THROUGHPUT (concurrency=$THROUGHPUT_C)"
@@ -215,6 +233,12 @@ measure_throughput spy "$SPY_URL"
 echo
 echo "[ FastAPI ($FASTAPI_FUNCTION) ]"
 measure_throughput fastapi "$FASTAPI_URL"
+echo
+echo "[ Go ($GO_FUNCTION) ]"
+measure_throughput go "$GO_URL"
+echo
+echo "[ Rust ($RUST_FUNCTION) ]"
+measure_throughput rust "$RUST_URL"
 
 hr
 
@@ -298,6 +322,76 @@ data = {
             "p50_ms": $fastapi_tput_p50_ms,
             "p95_ms": $fastapi_tput_p95_ms,
             "p99_ms": $fastapi_tput_p99_ms,
+        },
+    },
+    "rust": {
+        "function_name": "$RUST_FUNCTION",
+        "cold_start": {
+            "wall_ms":    $rust_cold_wall_ms,
+            "init_ms":    $rust_cold_init_ms,
+            "handler_ms": $rust_cold_handler_ms,
+        },
+        "warm_latency": {
+            "client": {
+                "avg_ms": $rust_warm_avg_ms,
+                "min_ms": $rust_warm_min_ms,
+                "max_ms": $rust_warm_max_ms,
+                "p50_ms": $rust_warm_p50_ms,
+                "p95_ms": $rust_warm_p95_ms,
+                "p99_ms": $rust_warm_p99_ms,
+            },
+            "server": {
+                "n":      $rust_warm_cw_n,
+                "min_ms": $rust_warm_cw_min_ms,
+                "p50_ms": $rust_warm_cw_p50_ms,
+                "p95_ms": $rust_warm_cw_p95_ms,
+                "max_ms": $rust_warm_cw_max_ms,
+                "avg_ms": $rust_warm_cw_avg_ms,
+            },
+        },
+        "throughput": {
+            "requests_per_sec": $rust_tput_rps,
+            "avg_ms": $rust_tput_avg_ms,
+            "min_ms": $rust_tput_min_ms,
+            "max_ms": $rust_tput_max_ms,
+            "p50_ms": $rust_tput_p50_ms,
+            "p95_ms": $rust_tput_p95_ms,
+            "p99_ms": $rust_tput_p99_ms,
+        },
+    },
+    "go": {
+        "function_name": "$GO_FUNCTION",
+        "cold_start": {
+            "wall_ms":    $go_cold_wall_ms,
+            "init_ms":    $go_cold_init_ms,
+            "handler_ms": $go_cold_handler_ms,
+        },
+        "warm_latency": {
+            "client": {
+                "avg_ms": $go_warm_avg_ms,
+                "min_ms": $go_warm_min_ms,
+                "max_ms": $go_warm_max_ms,
+                "p50_ms": $go_warm_p50_ms,
+                "p95_ms": $go_warm_p95_ms,
+                "p99_ms": $go_warm_p99_ms,
+            },
+            "server": {
+                "n":      $go_warm_cw_n,
+                "min_ms": $go_warm_cw_min_ms,
+                "p50_ms": $go_warm_cw_p50_ms,
+                "p95_ms": $go_warm_cw_p95_ms,
+                "max_ms": $go_warm_cw_max_ms,
+                "avg_ms": $go_warm_cw_avg_ms,
+            },
+        },
+        "throughput": {
+            "requests_per_sec": $go_tput_rps,
+            "avg_ms": $go_tput_avg_ms,
+            "min_ms": $go_tput_min_ms,
+            "max_ms": $go_tput_max_ms,
+            "p50_ms": $go_tput_p50_ms,
+            "p95_ms": $go_tput_p95_ms,
+            "p99_ms": $go_tput_p99_ms,
         },
     },
 }

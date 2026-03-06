@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# Build the Go binary, package it, and deploy to Lambda.
+# Flags (used internally by aws_setup.sh):
+#   --package-only   build function.zip but don't push
+#   --deploy-only    push existing function.zip without recompiling
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/_config.sh"
+
+PACKAGE_ONLY=false
+DEPLOY_ONLY=false
+for arg in "$@"; do
+    case $arg in
+        --package-only) PACKAGE_ONLY=true ;;
+        --deploy-only)  DEPLOY_ONLY=true ;;
+    esac
+done
+
+# ── compile ───────────────────────────────────────────────────────────────────
+if ! $DEPLOY_ONLY; then
+    echo "==> Compiling"
+
+    cd "$SCRIPT_DIR"
+    echo "  Running go mod tidy..."
+    go mod tidy
+
+    echo "  Building static Linux/amd64 binary..."
+    GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bootstrap .
+
+    echo "  Packaging..."
+    zip -q -j function.zip bootstrap
+    rm -f bootstrap
+
+    SIZE=$(du -sh "$SCRIPT_DIR/function.zip" | cut -f1)
+    echo "✓ function.zip ready ($SIZE)"
+fi
+
+$PACKAGE_ONLY && exit 0
+
+# ── deploy ────────────────────────────────────────────────────────────────────
+echo
+echo "==> Deploying"
+
+if ! aws lambda get-function --function-name "$FUNCTION_NAME" \
+        --region "$REGION" &>/dev/null; then
+    echo "Error: function '$FUNCTION_NAME' does not exist." >&2
+    echo "Run aws_setup.sh first." >&2
+    exit 1
+fi
+
+echo "  Uploading function.zip..."
+aws lambda update-function-code \
+    --function-name "$FUNCTION_NAME" \
+    --zip-file fileb://"$SCRIPT_DIR/function.zip" \
+    --region "$REGION" \
+    --output text --query 'CodeSize' > /dev/null
+
+echo "  Waiting for update to complete..."
+aws lambda wait function-updated \
+    --function-name "$FUNCTION_NAME" \
+    --region "$REGION"
+
+URL=$(aws lambda get-function-url-config \
+    --function-name "$FUNCTION_NAME" \
+    --region "$REGION" \
+    --query FunctionUrl --output text 2>/dev/null || echo "(no Function URL configured)")
+
+echo
+echo "✓ Deploy complete!"
+echo
+echo "  URL: $URL"
+echo

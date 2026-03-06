@@ -7,3 +7,7 @@ spyapi-demo/function.zip
 
 # Benchmark output
 benchmark_results.json
+go-demo/function.zip
+rust-demo/function.zip
+rust-demo/bootstrap
+rust-demo/target/

@@ -1,4 +1,4 @@
-import math, time, sys, subprocess, array
+import math, time, sys, array
 from dataclasses import dataclass
 
 @dataclass
@@ -181,25 +181,19 @@ def render_quads(verts, faces, texs, ra, rb, rc):
                      L, tx, off, tw, th)
 
 def animate():
-    print("Starting ffplay...", file=sys.stderr)
-    ffplay = subprocess.Popen(
-        ['ffplay', '-loglevel', 'error', '-autoexit',
-         '-f', 'image2pipe', '-vcodec', 'ppm', '-i', '-'],
-        stdin=subprocess.PIPE)
+    out = sys.stdout.buffer
     header = ('P6\n%d %d\n255\n' % (w, h)).encode()
 
     frame_num = 0
-    ra = rb = rc = 0
     t = 0
     last = time.time()
-    t0 = time.time()
     sa = 2 * 0.21
     sb = 2 * 0.2345
     sc = 2 * 0.2456
 
     tt = 0
     try:
-        while ffplay.poll() is None:
+        while True:
             frame_num += 1
             tt += 0.03
             img[:] = ZEROS
@@ -207,9 +201,9 @@ def animate():
             render_quads(vertices, faces, texs, sa*tt, sb*tt, sc*tt)
             t += time.time()
             try:
-                ffplay.stdin.write(header)
-                ffplay.stdin.write(img.tobytes())
-                ffplay.stdin.flush()
+                out.write(header)
+                out.write(img.tobytes())
+                out.flush()
             except (BrokenPipeError, OSError):
                 break
             delta = time.time() - last
@@ -221,11 +215,5 @@ def animate():
                 last = time.time()
     except KeyboardInterrupt:
         pass
-    finally:
-        try:
-            ffplay.stdin.close()
-        except Exception:
-            pass
-        ffplay.wait()
 
 animate()

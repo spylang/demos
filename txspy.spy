@@ -21,8 +21,8 @@ border to expose the bytes as an `array[u8, 1]`. `file.write` emits exactly
 
 A couple of SPy quirks shaped the structure:
   - A function that takes parameters cannot assign to a module-level `var`
-    global, so the per-frame stats and the PPM parser cursor are threaded
-    through as small gc_ptr[i32] cells instead.
+    global, so the PPM parser cursor is threaded through as a small
+    gc_ptr[i32] cell instead.
   - `i32(x)` only converts from `f64`; to widen a `u8` to a number, assign it
     to an `f64`/`i32` local (the conversion is implicit).
 """
@@ -156,7 +156,7 @@ def draw_triangle(x0: f64, y0: f64, u0: f64, v0: f64,
                   x2: f64, y2: f64, u2: f64, v2: f64,
                   L: f64,
                   tx: ByteArray, off: i32, tw: i32, th: i32,
-                  img: ByteArray, stats: list[i32]) -> None:
+                  img: ByteArray) -> None:
     delta = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0)
     ux = ((u1 - u0) * (y2 - y0) - (u2 - u0) * (y1 - y0)) / delta
     uy = ((x1 - x0) * (u2 - u0) - (x2 - x0) * (u1 - u0)) / delta
@@ -184,7 +184,6 @@ def draw_triangle(x0: f64, y0: f64, u0: f64, v0: f64,
     yb = min(H, i32(fmax3(y0, y1, y2)) + 1)
 
     xaf: f64 = xa
-    count = 0
     for y in range(ya, yb):
         yf: f64 = y
         yf = yf + 0.5
@@ -207,20 +206,16 @@ def draw_triangle(x0: f64, y0: f64, u0: f64, v0: f64,
                 img[img_idx] = i32(r * L)
                 img[img_idx + 1] = i32(g * L)
                 img[img_idx + 2] = i32(b * L)
-                count = count + 1
             e01 = e01 + nx01
             e12 = e12 + nx12
             e20 = e20 + nx20
             u = u + ux
             v = v + vx
 
-    stats[1] = stats[1] + 1
-    stats[0] = stats[0] + count
-
 
 def render_quads(verts: list[Vec3], faces: list[Face], texs: list[Tex],
                  xpts: list[XPt], order: list[i32], keys: list[f64],
-                 img: ByteArray, stats: list[i32],
+                 img: ByteArray,
                  ra: f64, rb: f64, rc: f64) -> None:
     cra = cos(ra)
     sra = sin(ra)
@@ -312,11 +307,11 @@ def render_quads(verts: list[Vec3], faces: list[Face], texs: list[Tex],
             draw_triangle(pbx, pby, 512.0, 256.0,
                           pax, pay, 0.0, 256.0,
                           pcx, pcy, 512.0, 0.0,
-                          L, tx, off, tw, th, img, stats)
+                          L, tx, off, tw, th, img)
             draw_triangle(pcx, pcy, 512.0, 0.0,
                           pax, pay, 0.0, 256.0,
                           pdx, pdy, 0.0, 0.0,
-                          L, tx, off, tw, th, img, stats)
+                          L, tx, off, tw, th, img)
 
 
 def build_geometry(verts: list[Vec3], faces: list[Face]) -> None:
@@ -371,7 +366,6 @@ def main() -> None:
     xpts = [XPt(0.0, 0.0, 0.0, 0.0, 0.0)] * VN
     order = [0] * FN
     keys = [0.0] * FN
-    stats = [0, 0]
 
     out = open("/dev/stdout", "w")
     header = "P6\n" + str(W) + " " + str(H) + "\n255\n"
@@ -390,10 +384,8 @@ def main() -> None:
         tt = tt + 0.03
         for p in range(npix):
             img[p] = 0
-        stats[0] = 0
-        stats[1] = 0
         t0 = time()
-        render_quads(verts, faces, texs, xpts, order, keys, img, stats,
+        render_quads(verts, faces, texs, xpts, order, keys, img,
                      sa * tt, sb * tt, sc * tt)
         acc = acc + (time() - t0)
 
@@ -412,8 +404,7 @@ def main() -> None:
             fnf: f64 = frame_num
             ms = acc * 1000.0 / fnf
             fps = fnf / delta
-            err.write(str(ms) + " ms (" + str(fps) + " FPS), "
-                      + str(stats[1]) + " tri\n")
+            err.write(str(ms) + " ms (" + str(fps) + " FPS)\n")
             err.flush()
             acc = 0.0
             frame_num = 0

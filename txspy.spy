@@ -15,8 +15,9 @@ ffmpeg) and the display (originally ffplay) are split out of the program:
             -f image2pipe -vcodec ppm -i -
 
 Binary I/O works because SPy `str` is length-prefixed (not NUL-terminated): we
-read whole PPM files into a `str` and poke/peek individual bytes through
-`as_StrObject`, and `file.write` emits exactly `length` bytes.
+read whole files into a `str`, then use `StrObject.from_str` once at the I/O
+border to expose the bytes as an `array[u8, 1]`. `file.write` emits exactly
+`length` bytes.
 
 A couple of SPy quirks shaped the structure:
   - A function that takes parameters cannot assign to a module-level `var`
@@ -27,10 +28,13 @@ A couple of SPy quirks shaped the structure:
 """
 
 from math import pi, cos, sin, sqrt, fabs
-from unsafe import gc_alloc, gc_ptr
+from unsafe import gc_alloc, gc_ptr, ptr_copy
 from _str import StrObject
 from _range import range
 from time import time
+from array import array
+
+ByteArray = array[u8, 1]
 
 W: i32 = 1920
 H: i32 = 1080
@@ -62,7 +66,7 @@ class XPt:
 
 @struct
 class Tex:
-    so: gc_ptr[StrObject]   # pixel buffer (points into the loaded PPM str)
+    buf: ByteArray          # pixel buffer (points into the loaded PPM bytes)
     off: i32                # byte offset where pixel data starts
     tw: i32
     th: i32
@@ -77,14 +81,14 @@ class Face:
     d: i32
 
 
-def skip_ws(ll: gc_ptr[StrObject], n: i32, cur: gc_ptr[i32]) -> None:
+def skip_ws(buf: ByteArray, n: i32, cur: gc_ptr[i32]) -> None:
     while cur[0] < n:
-        c: i32 = ll.utf8[cur[0]]
+        c: i32 = buf[cur[0]]
         if c == 32 or c == 9 or c == 10 or c == 13:
             cur[0] = cur[0] + 1
         elif c == 35:  # '#'
             while cur[0] < n:
-                d: i32 = ll.utf8[cur[0]]
+                d: i32 = buf[cur[0]]
                 if d == 10:
                     break
                 cur[0] = cur[0] + 1
@@ -92,11 +96,11 @@ def skip_ws(ll: gc_ptr[StrObject], n: i32, cur: gc_ptr[i32]) -> None:
             return
 
 
-def read_int(ll: gc_ptr[StrObject], n: i32, cur: gc_ptr[i32]) -> i32:
-    skip_ws(ll, n, cur)
+def read_int(buf: ByteArray, n: i32, cur: gc_ptr[i32]) -> i32:
+    skip_ws(buf, n, cur)
     val = 0
     while cur[0] < n:
-        c: i32 = ll.utf8[cur[0]]
+        c: i32 = buf[cur[0]]
         if c >= 48 and c <= 57:
             val = val * 10 + (c - 48)
             cur[0] = cur[0] + 1
@@ -105,17 +109,17 @@ def read_int(ll: gc_ptr[StrObject], n: i32, cur: gc_ptr[i32]) -> i32:
     return val
 
 
-def parse_ppm(ll: gc_ptr[StrObject]) -> Tex:
-    n: i32 = ll.length
+def parse_ppm(buf: ByteArray) -> Tex:
+    n: i32 = len(buf)
     cur = gc_alloc[i32](1)
     cur[0] = 0
-    skip_ws(ll, n, cur)
+    skip_ws(buf, n, cur)
     cur[0] = cur[0] + 2          # skip the "P6" magic
-    tw = read_int(ll, n, cur)
-    th = read_int(ll, n, cur)
-    mx = read_int(ll, n, cur)    # maxval, assumed 255
+    tw = read_int(buf, n, cur)
+    th = read_int(buf, n, cur)
+    mx = read_int(buf, n, cur)   # maxval, assumed 255
     cur[0] = cur[0] + 1          # single whitespace before the pixel data
-    return Tex(ll, cur[0], tw, th)
+    return Tex(buf, cur[0], tw, th)
 
 
 def fmin3(a: f64, b: f64, c: f64) -> f64:
@@ -140,8 +144,8 @@ def draw_triangle(x0: f64, y0: f64, u0: f64, v0: f64,
                   x1: f64, y1: f64, u1: f64, v1: f64,
                   x2: f64, y2: f64, u2: f64, v2: f64,
                   L: f64,
-                  txll: gc_ptr[StrObject], off: i32, tw: i32, th: i32,
-                  imgll: gc_ptr[StrObject], stats: gc_ptr[i32]) -> None:
+                  tx: ByteArray, off: i32, tw: i32, th: i32,
+                  img: ByteArray, stats: gc_ptr[i32]) -> None:
     delta = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0)
     ux = ((u1 - u0) * (y2 - y0) - (u2 - u0) * (y1 - y0)) / delta
     uy = ((x1 - x0) * (u2 - u0) - (x2 - x0) * (u1 - u0)) / delta
@@ -186,12 +190,12 @@ def draw_triangle(x0: f64, y0: f64, u0: f64, v0: f64,
                 vi = i32(v) & vmask
                 tx_idx = (vi * tw + ui) * 3 + off
                 img_idx = row_base + x * 3
-                r: f64 = txll.utf8[tx_idx]
-                g: f64 = txll.utf8[tx_idx + 1]
-                b: f64 = txll.utf8[tx_idx + 2]
-                imgll.utf8[img_idx] = i32(r * L)
-                imgll.utf8[img_idx + 1] = i32(g * L)
-                imgll.utf8[img_idx + 2] = i32(b * L)
+                r: f64 = tx[tx_idx]
+                g: f64 = tx[tx_idx + 1]
+                b: f64 = tx[tx_idx + 2]
+                img[img_idx] = i32(r * L)
+                img[img_idx + 1] = i32(g * L)
+                img[img_idx + 2] = i32(b * L)
                 count = count + 1
             e01 = e01 + nx01
             e12 = e12 + nx12
@@ -205,7 +209,7 @@ def draw_triangle(x0: f64, y0: f64, u0: f64, v0: f64,
 
 def render_quads(verts: gc_ptr[Vec3], faces: gc_ptr[Face], texs: gc_ptr[Tex],
                  xpts: gc_ptr[XPt], order: gc_ptr[i32], keys: gc_ptr[f64],
-                 imgll: gc_ptr[StrObject], stats: gc_ptr[i32],
+                 img: ByteArray, stats: gc_ptr[i32],
                  ra: f64, rb: f64, rc: f64) -> None:
     cra = cos(ra)
     sra = sin(ra)
@@ -290,18 +294,18 @@ def render_quads(verts: gc_ptr[Vec3], faces: gc_ptr[Face], texs: gc_ptr[Tex],
             nl = sqrt(nrx * nrx + nry * nry + nrz * nrz)
             L = 0.5 + 0.49 * fabs(nrz / nl)
             tex = texs[fc.tex]
-            txll = tex.so
+            tx = tex.buf
             off = tex.off
             tw = tex.tw
             th = tex.th
             draw_triangle(pbx, pby, 512.0, 256.0,
                           pax, pay, 0.0, 256.0,
                           pcx, pcy, 512.0, 0.0,
-                          L, txll, off, tw, th, imgll, stats)
+                          L, tx, off, tw, th, img, stats)
             draw_triangle(pcx, pcy, 512.0, 0.0,
                           pax, pay, 0.0, 256.0,
                           pdx, pdy, 0.0, 0.0,
-                          L, txll, off, tw, th, imgll, stats)
+                          L, tx, off, tw, th, img, stats)
 
 
 def build_geometry(verts: gc_ptr[Vec3], faces: gc_ptr[Face]) -> None:
@@ -333,12 +337,18 @@ def build_geometry(verts: gc_ptr[Vec3], faces: gc_ptr[Face]) -> None:
                             i2 + j2 * N)
 
 
-def read_file(filename: str) -> gc_ptr[StrObject]:
+def read_file(filename: str) -> ByteArray:
+    """Read a file into an array[u8, 1].
+
+    This is where the StrObject hack lives: `file.read` returns a `str`, and
+    the only way to expose its bytes as a mutable buffer is to cast through
+    StrObject and then wrap the utf8 pointer with `array.from_buffer`.
+    """
     f = open(filename, "r")
     data = f.read(-1)
     f.close()
-    #return as_StrObject(data)
-    return StrObject.from_str(data)
+    ll = StrObject.from_str(data)
+    return ByteArray.from_buffer(ll.utf8, ll.length)
 
 
 def main() -> None:
@@ -356,13 +366,9 @@ def main() -> None:
         err.write("  " + str(twi) + "x" + str(thi) + "\n")
     err.flush()
 
-    # framebuffer: W*H*3 bytes, obtained as a real heap str full of zeros
-    zf = open("/dev/zero", "r")
-    fb = zf.read(W * H * 3)
-    zf.close()
-    #imgll = as_StrObject(fb)
-    imgll = StrObject.from_str(fb)
+    # framebuffer: a plain ByteArray we mutate every frame.
     npix = W * H * 3
+    img = ByteArray(npix)
 
     verts = gc_alloc[Vec3](VN)
     faces = gc_alloc[Face](FN)
@@ -389,16 +395,22 @@ def main() -> None:
         frame_num = frame_num + 1
         tt = tt + 0.03
         for p in range(npix):
-            imgll.utf8[p] = 0
+            img[p] = 0
         stats[0] = 0
         stats[1] = 0
         t0 = time()
-        render_quads(verts, faces, texs, xpts, order, keys, imgll, stats,
+        render_quads(verts, faces, texs, xpts, order, keys, img, stats,
                      sa * tt, sb * tt, sc * tt)
         acc = acc + (time() - t0)
 
+        # Copy the framebuffer into a fresh str just for writing. `out.write`
+        # only accepts `str`, so we bounce through a temporary StrObject and
+        # cast it. This is the only remaining StrObject touch-point in the
+        # hot path.
+        fbll = StrObject.alloc(npix)
+        ptr_copy(fbll.utf8, img.__ll__.items, npix)
         out.write(header)
-        out.write(fb)
+        out.write(StrObject.to_str(fbll))
         out.flush()
 
         delta = time() - last

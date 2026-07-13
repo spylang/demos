@@ -1,60 +1,52 @@
 import math, time, sys, subprocess, array
 
-def load_image(path):
-    """Load an image via ffmpeg, returning (w, h, a).
+def skip_ws(ll, n, cur):
+    while cur[0] < n:
+        c = ll[cur[0]]
+        if c == 32 or c == 9 or c == 10 or c == 13:
+            cur[0] = cur[0] + 1
+        elif c == 35:  # '#'
+            while cur[0] < n:
+                d = ll[cur[0]]
+                if d == 10:
+                    break
+                cur[0] = cur[0] + 1
+        else:
+            return
 
-    `a` is an array.array('B') of w*h*3 bytes in RGB order.
-    """
-    proc = subprocess.Popen(
-        ["ffmpeg", "-v", "error", "-i", path, "-f", "image2pipe",
-         "-pix_fmt", "rgb24", "-vcodec", "ppm", "-"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    out, err = proc.communicate()
-    if proc.returncode != 0:
-        raise RuntimeError("ffmpeg failed: " + err.decode("utf-8", "replace"))
+def read_int(ll, n, cur):
+    skip_ws(ll, n, cur)
+    val = 0
+    while cur[0] < n:
+        c = ll[cur[0]]
+        if c >= 48 and c <= 57:
+            val = val * 10 + (c - 48)
+            cur[0] = cur[0] + 1
+        else:
+            break
+    return val
 
-    # Parse the PPM header: "P6\n<w> <h>\n<maxval>\n" followed by raw bytes.
-    # Whitespace between fields may be any mix of spaces/newlines, and
-    # comment lines starting with '#' are allowed.
-    if out[:2] != b"P6":
-        raise ValueError("unexpected ffmpeg output (not a P6 PPM)")
+def parse_ppm(ll):
+    n = len(ll)
+    cur = [0]
+    skip_ws(ll, n, cur)
+    cur[0] = cur[0] + 2          # skip the "P6" magic
+    tw = read_int(ll, n, cur)
+    th = read_int(ll, n, cur)
+    mx = read_int(ll, n, cur)    # maxval, assumed 255
+    cur[0] = cur[0] + 1          # single whitespace before the pixel data
+    return (ll, cur[0], tw, th)
 
-    fields = []          # collected header integers: width, height, maxval
-    i = 2
-    n = len(out)
-    while len(fields) < 3:
-        # skip whitespace
-        while i < n and out[i] in b" \t\r\n":
-            i += 1
-        # skip comments
-        if i < n and out[i:i + 1] == b"#":
-            while i < n and out[i] not in b"\r\n":
-                i += 1
-            continue
-        start = i
-        while i < n and out[i] not in b" \t\r\n":
-            i += 1
-        fields.append(int(out[start:i]))
-    # single whitespace char separates header from pixel data
-    i += 1
-
-    w, h, maxval = fields
-    if maxval != 255:
-        raise ValueError("unsupported maxval %d" % maxval)
-
-    a = array.array("B", out[i:i + w * h * 3])
-    if len(a) != w * h * 3:
-        raise ValueError("truncated pixel data")
-    return w, h, a
+def read_file(filename):
+    with open(filename, "rb") as f:
+        return f.read()
 
 w, h = 1920, 1080
 
-txs = [load_image("3dswr.png"),
-       load_image("pyodide_logo.png"),
-       load_image("python_logo.png"),
-       load_image("numpy_logo.png")]
+txs = [parse_ppm(read_file("3dswr.ppm")),
+       parse_ppm(read_file("pyodide_logo.ppm")),
+       parse_ppm(read_file("python_logo.ppm")),
+       parse_ppm(read_file("numpy_logo.ppm"))]
 
 img = array.array('B', [0]) * (w*h*3)
 ZEROS = array.array('B', [0]) * (w*h*3)
@@ -79,7 +71,7 @@ def triangle(x0, y0, u0, v0,
     k20 = -(x2*nx20 + y2*ny20)
 
 
-    tw, th, tpx = tx
+    txll, off, tw, th = tx
     umask = tw - 1
     vmask = th - 1
     xa = max(0, int(min(x0, x1, x2)))
@@ -100,10 +92,10 @@ def triangle(x0, y0, u0, v0,
             if e01 <= 0 and e12 <= 0 and e20 <= 0:
                 ui = int(u) & umask
                 vi = int(v) & vmask
-                rp = (vi*tx[0] + ui)*3
-                img[wp] = int(tpx[rp] * L)
-                img[wp+1] = int(tpx[rp+1] * L)
-                img[wp+2] = int(tpx[rp+2] * L)
+                tx_idx = (vi*tw + ui)*3 + off
+                img[wp] = int(txll[tx_idx] * L)
+                img[wp+1] = int(txll[tx_idx+1] * L)
+                img[wp+2] = int(txll[tx_idx+2] * L)
             e01 += nx01
             e12 += nx12
             e20 += nx20

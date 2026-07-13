@@ -26,27 +26,25 @@ def read_int(ll, n, cur):
             break
     return val
 
-def parse_ppm(ll):
-    n = len(ll)
-    cur = [0]
-    skip_ws(ll, n, cur)
-    cur[0] = cur[0] + 2          # skip the "P6" magic
-    tw = read_int(ll, n, cur)
-    th = read_int(ll, n, cur)
-    mx = read_int(ll, n, cur)    # maxval, assumed 255
-    cur[0] = cur[0] + 1          # single whitespace before the pixel data
-    return (ll, cur[0], tw, th)
-
-def read_file(filename):
+def load_image(filename):
     with open(filename, "rb") as f:
-        return f.read()
+        buf = f.read()
+    n = len(buf)
+    cur = [0]
+    skip_ws(buf, n, cur)
+    cur[0] = cur[0] + 2          # skip the "P6" magic
+    tw = read_int(buf, n, cur)
+    th = read_int(buf, n, cur)
+    mx = read_int(buf, n, cur)   # maxval, assumed 255
+    cur[0] = cur[0] + 1          # single whitespace before the pixel data
+    return (buf, cur[0], tw, th)
 
 w, h = 1920, 1080
 
-txs = [parse_ppm(read_file("3dswr.ppm")),
-       parse_ppm(read_file("pyodide_logo.ppm")),
-       parse_ppm(read_file("python_logo.ppm")),
-       parse_ppm(read_file("numpy_logo.ppm"))]
+txs = [load_image("3dswr.ppm"),
+       load_image("pyodide_logo.ppm"),
+       load_image("python_logo.ppm"),
+       load_image("numpy_logo.ppm")]
 
 img = array.array('B', [0]) * (w*h*3)
 ZEROS = array.array('B', [0]) * (w*h*3)

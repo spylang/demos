@@ -109,7 +109,18 @@ def read_int(buf: ByteArray, n: i32, cur: gc_ptr[i32]) -> i32:
     return val
 
 
-def parse_ppm(buf: ByteArray) -> Tex:
+def load_image(filename: str) -> Tex:
+    """Read a P6 PPM file and return a Tex pointing into its bytes.
+
+    `StrObject.from_str` is the only I/O-border cast: `file.read` returns a
+    `str`, and we expose its bytes as a mutable ByteArray via `from_buffer`.
+    """
+    f = open(filename, "r")
+    data = f.read(-1)
+    f.close()
+    ll = StrObject.from_str(data)
+    buf = ByteArray.from_buffer(ll.utf8, ll.length)
+
     n: i32 = len(buf)
     cur = gc_alloc[i32](1)
     cur[0] = 0
@@ -337,29 +348,15 @@ def build_geometry(verts: gc_ptr[Vec3], faces: gc_ptr[Face]) -> None:
                             i2 + j2 * N)
 
 
-def read_file(filename: str) -> ByteArray:
-    """Read a file into an array[u8, 1].
-
-    This is where the StrObject hack lives: `file.read` returns a `str`, and
-    the only way to expose its bytes as a mutable buffer is to cast through
-    StrObject and then wrap the utf8 pointer with `array.from_buffer`.
-    """
-    f = open(filename, "r")
-    data = f.read(-1)
-    f.close()
-    ll = StrObject.from_str(data)
-    return ByteArray.from_buffer(ll.utf8, ll.length)
-
-
 def main() -> None:
     err = open("/dev/stderr", "w")
     err.write("Loading textures...\n")
 
     texs = gc_alloc[Tex](NTEX)
-    texs[0] = parse_ppm(read_file("3dswr.ppm"))
-    texs[1] = parse_ppm(read_file("pyodide_logo.ppm"))
-    texs[2] = parse_ppm(read_file("python_logo.ppm"))
-    texs[3] = parse_ppm(read_file("numpy_logo.ppm"))
+    texs[0] = load_image("3dswr.ppm")
+    texs[1] = load_image("pyodide_logo.ppm")
+    texs[2] = load_image("python_logo.ppm")
+    texs[3] = load_image("numpy_logo.ppm")
     for ti in range(NTEX):
         twi = texs[ti].tw
         thi = texs[ti].th

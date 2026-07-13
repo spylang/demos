@@ -1,0 +1,414 @@
+"""
+SPy port of txpypy.py.
+
+SPy has no subprocess module, so the PNG decoding (originally done by spawning
+ffmpeg) and the display (originally ffplay) are split out of the program:
+
+  - Textures must be pre-decoded to binary P6 PPM files. Convert them with:
+        for f in 3dswr pyodide_logo python_logo numpy_logo; do
+            ffmpeg -loglevel error -y -i $f.png -f image2pipe -vcodec ppm $f.ppm
+        done
+
+  - The rendered frames are written to stdout as a stream of P6 PPM images.
+    Pipe them into ffplay for display:
+        spy build -x txspy.spy | ffplay -loglevel error -autoexit \
+            -f image2pipe -vcodec ppm -i -
+
+Binary I/O works because SPy `str` is length-prefixed (not NUL-terminated): we
+read whole PPM files into a `str` and poke/peek individual bytes through
+`as_StrObject`, and `file.write` emits exactly `length` bytes.
+
+A couple of SPy quirks shaped the structure:
+  - A function that takes parameters cannot assign to a module-level `var`
+    global, so the per-frame stats and the PPM parser cursor are threaded
+    through as small gc_ptr[i32] cells instead.
+  - `i32(x)` only converts from `f64`; to widen a `u8` to a number, assign it
+    to an `f64`/`i32` local (the conversion is implicit).
+"""
+
+from math import pi, cos, sin, sqrt, fabs
+from unsafe import gc_alloc, gc_ptr
+from _str import StrObject
+from _range import range
+from time import time
+
+W: i32 = 1920
+H: i32 = 1080
+N: i32 = 7
+M: i32 = 13
+R1: f64 = 1.5
+R2: f64 = 0.5
+
+VN: i32 = N * M       # number of vertices
+FN: i32 = N * M       # number of quad faces
+NTEX: i32 = 4
+
+
+@struct
+class Vec3:
+    x: f64
+    y: f64
+    z: f64
+
+
+@struct
+class XPt:
+    px: f64
+    py: f64
+    x: f64
+    y: f64
+    z: f64
+
+
+@struct
+class Tex:
+    so: gc_ptr[StrObject]   # pixel buffer (points into the loaded PPM str)
+    off: i32                # byte offset where pixel data starts
+    tw: i32
+    th: i32
+
+
+@struct
+class Face:
+    tex: i32
+    a: i32
+    b: i32
+    c: i32
+    d: i32
+
+
+def skip_ws(ll: gc_ptr[StrObject], n: i32, cur: gc_ptr[i32]) -> None:
+    while cur[0] < n:
+        c: i32 = ll.utf8[cur[0]]
+        if c == 32 or c == 9 or c == 10 or c == 13:
+            cur[0] = cur[0] + 1
+        elif c == 35:  # '#'
+            while cur[0] < n:
+                d: i32 = ll.utf8[cur[0]]
+                if d == 10:
+                    break
+                cur[0] = cur[0] + 1
+        else:
+            return
+
+
+def read_int(ll: gc_ptr[StrObject], n: i32, cur: gc_ptr[i32]) -> i32:
+    skip_ws(ll, n, cur)
+    val = 0
+    while cur[0] < n:
+        c: i32 = ll.utf8[cur[0]]
+        if c >= 48 and c <= 57:
+            val = val * 10 + (c - 48)
+            cur[0] = cur[0] + 1
+        else:
+            break
+    return val
+
+
+def parse_ppm(ll: gc_ptr[StrObject]) -> Tex:
+    n: i32 = ll.length
+    cur = gc_alloc[i32](1)
+    cur[0] = 0
+    skip_ws(ll, n, cur)
+    cur[0] = cur[0] + 2          # skip the "P6" magic
+    tw = read_int(ll, n, cur)
+    th = read_int(ll, n, cur)
+    mx = read_int(ll, n, cur)    # maxval, assumed 255
+    cur[0] = cur[0] + 1          # single whitespace before the pixel data
+    return Tex(ll, cur[0], tw, th)
+
+
+def fmin3(a: f64, b: f64, c: f64) -> f64:
+    m = a
+    if b < m:
+        m = b
+    if c < m:
+        m = c
+    return m
+
+
+def fmax3(a: f64, b: f64, c: f64) -> f64:
+    m = a
+    if b > m:
+        m = b
+    if c > m:
+        m = c
+    return m
+
+
+def draw_triangle(x0: f64, y0: f64, u0: f64, v0: f64,
+                  x1: f64, y1: f64, u1: f64, v1: f64,
+                  x2: f64, y2: f64, u2: f64, v2: f64,
+                  L: f64,
+                  txll: gc_ptr[StrObject], off: i32, tw: i32, th: i32,
+                  imgll: gc_ptr[StrObject], stats: gc_ptr[i32]) -> None:
+    delta = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0)
+    ux = ((u1 - u0) * (y2 - y0) - (u2 - u0) * (y1 - y0)) / delta
+    uy = ((x1 - x0) * (u2 - u0) - (x2 - x0) * (u1 - u0)) / delta
+    uk = u0 - x0 * ux - y0 * uy
+    vx = ((v1 - v0) * (y2 - y0) - (v2 - v0) * (y1 - y0)) / delta
+    vy = ((x1 - x0) * (v2 - v0) - (x2 - x0) * (v1 - v0)) / delta
+    vk = v0 - x0 * vx - y0 * vy
+
+    nx01 = y1 - y0
+    ny01 = x0 - x1
+    nx12 = y2 - y1
+    ny12 = x1 - x2
+    nx20 = y0 - y2
+    ny20 = x2 - x0
+    k01 = -(x0 * nx01 + y0 * ny01)
+    k12 = -(x1 * nx12 + y1 * ny12)
+    k20 = -(x2 * nx20 + y2 * ny20)
+
+    umask = tw - 1
+    vmask = th - 1
+
+    xa = max(0, i32(fmin3(x0, x1, x2)))
+    ya = max(0, i32(fmin3(y0, y1, y2)))
+    xb = min(W, i32(fmax3(x0, x1, x2)) + 1)
+    yb = min(H, i32(fmax3(y0, y1, y2)) + 1)
+
+    xaf: f64 = xa
+    count = 0
+    for y in range(ya, yb):
+        yf: f64 = y
+        yf = yf + 0.5
+        xf = xaf + 0.5
+        e01 = xf * nx01 + yf * ny01 + k01
+        e12 = xf * nx12 + yf * ny12 + k12
+        e20 = xf * nx20 + yf * ny20 + k20
+        u = xf * ux + yf * uy + uk
+        v = xf * vx + yf * vy + vk
+        row_base = y * W * 3
+        for x in range(xa, xb):
+            if e01 <= 0.0 and e12 <= 0.0 and e20 <= 0.0:
+                ui = i32(u) & umask
+                vi = i32(v) & vmask
+                tx_idx = (vi * tw + ui) * 3 + off
+                img_idx = row_base + x * 3
+                r: f64 = txll.utf8[tx_idx]
+                g: f64 = txll.utf8[tx_idx + 1]
+                b: f64 = txll.utf8[tx_idx + 2]
+                imgll.utf8[img_idx] = i32(r * L)
+                imgll.utf8[img_idx + 1] = i32(g * L)
+                imgll.utf8[img_idx + 2] = i32(b * L)
+                count = count + 1
+            e01 = e01 + nx01
+            e12 = e12 + nx12
+            e20 = e20 + nx20
+            u = u + ux
+            v = v + vx
+
+    stats[1] = stats[1] + 1
+    stats[0] = stats[0] + count
+
+
+def render_quads(verts: gc_ptr[Vec3], faces: gc_ptr[Face], texs: gc_ptr[Tex],
+                 xpts: gc_ptr[XPt], order: gc_ptr[i32], keys: gc_ptr[f64],
+                 imgll: gc_ptr[StrObject], stats: gc_ptr[i32],
+                 ra: f64, rb: f64, rc: f64) -> None:
+    cra = cos(ra)
+    sra = sin(ra)
+    crb = cos(rb)
+    srb = sin(rb)
+    crc = cos(rc)
+    src = sin(rc)
+
+    hw: f64 = W
+    hw = hw / 2.0
+    hh: f64 = H
+    hh = hh / 2.0
+    wf: f64 = W
+
+    for k in range(VN):
+        vk = verts[k]
+        x = vk.x
+        y = vk.y
+        z = vk.z
+        nx = x * cra + y * sra
+        ny = y * cra - x * sra
+        x = nx
+        y = ny
+        nx2 = x * crb + z * srb
+        nz = z * crb - x * srb
+        x = nx2
+        z = nz
+        ny2 = y * crc + z * src
+        nz2 = z * crc - y * src
+        y = ny2
+        z = nz2
+        px = hw + x * wf / (8.0 + z)
+        py = hh - y * wf / (8.0 + z)
+        xpts[k] = XPt(px, py, x, y, z)
+
+    for t in range(FN):
+        order[t] = t
+        fa = faces[t].a
+        keys[t] = -xpts[fa].z
+
+    # insertion sort 'order' ascending by key (painter's algorithm)
+    for a in range(1, FN):
+        cur = order[a]
+        ck = keys[cur]
+        b = a - 1
+        while b >= 0:
+            ob = order[b]
+            if keys[ob] > ck:
+                order[b + 1] = ob
+                b = b - 1
+            else:
+                break
+        order[b + 1] = cur
+
+    for s in range(FN):
+        fc = faces[order[s]]
+        xpa = xpts[fc.a]
+        xpb = xpts[fc.b]
+        xpc = xpts[fc.c]
+        xpd = xpts[fc.d]
+        pax = xpa.px
+        pay = xpa.py
+        pbx = xpb.px
+        pby = xpb.py
+        pcx = xpc.px
+        pcy = xpc.py
+        pdx = xpd.px
+        pdy = xpd.py
+        if (pbx - pcx) * (pay - pcy) - (pby - pcy) * (pax - pcx) > 0.0:
+            ax = xpa.x
+            ay = xpa.y
+            az = xpa.z
+            bx = xpb.x
+            by = xpb.y
+            bz = xpb.z
+            cx = xpc.x
+            cy = xpc.y
+            cz = xpc.z
+            nrx = (cy - ay) * (bz - az) - (cz - az) * (by - ay)
+            nry = (cz - az) * (bx - ax) - (cx - ax) * (bz - az)
+            nrz = (cx - ax) * (by - ay) - (cy - ay) * (bx - ax)
+            nl = sqrt(nrx * nrx + nry * nry + nrz * nrz)
+            L = 0.5 + 0.49 * fabs(nrz / nl)
+            tex = texs[fc.tex]
+            txll = tex.so
+            off = tex.off
+            tw = tex.tw
+            th = tex.th
+            draw_triangle(pbx, pby, 512.0, 256.0,
+                          pax, pay, 0.0, 256.0,
+                          pcx, pcy, 512.0, 0.0,
+                          L, txll, off, tw, th, imgll, stats)
+            draw_triangle(pcx, pcy, 512.0, 0.0,
+                          pax, pay, 0.0, 256.0,
+                          pdx, pdy, 0.0, 0.0,
+                          L, txll, off, tw, th, imgll, stats)
+
+
+def build_geometry(verts: gc_ptr[Vec3], faces: gc_ptr[Face]) -> None:
+    circle = gc_alloc[Vec3](N)
+    for i in range(N):
+        ang: f64 = i
+        ang = ang * 2.0 * pi / N
+        circle[i] = Vec3(R1 + R2 * cos(ang), R2 * sin(ang), 0.0)
+
+    for j in range(M):
+        aj: f64 = j
+        aj = aj * 2.0 * pi / M
+        caj = cos(aj)
+        saj = sin(aj)
+        for k in range(N):
+            cp = circle[k]
+            x = cp.x
+            y = cp.y
+            z = cp.z
+            verts[j * N + k] = Vec3(x * caj + z * saj, y, z * caj - x * saj)
+
+    for j2 in range(M):
+        for i2 in range(N):
+            t = j2 * N + i2
+            faces[t] = Face((i2 * M + j2) % NTEX,
+                            (i2 + 1) % N + j2 * N,
+                            (i2 + 1) % N + (j2 + 1) % M * N,
+                            i2 + (j2 + 1) % M * N,
+                            i2 + j2 * N)
+
+
+def read_file(filename: str) -> gc_ptr[StrObject]:
+    f = open(filename, "r")
+    data = f.read(-1)
+    f.close()
+    #return as_StrObject(data)
+    return StrObject.from_str(data)
+
+
+def main() -> None:
+    err = open("/dev/stderr", "w")
+    err.write("Loading textures...\n")
+
+    texs = gc_alloc[Tex](NTEX)
+    texs[0] = parse_ppm(read_file("3dswr.ppm"))
+    texs[1] = parse_ppm(read_file("pyodide_logo.ppm"))
+    texs[2] = parse_ppm(read_file("python_logo.ppm"))
+    texs[3] = parse_ppm(read_file("numpy_logo.ppm"))
+    for ti in range(NTEX):
+        twi = texs[ti].tw
+        thi = texs[ti].th
+        err.write("  " + str(twi) + "x" + str(thi) + "\n")
+    err.flush()
+
+    # framebuffer: W*H*3 bytes, obtained as a real heap str full of zeros
+    zf = open("/dev/zero", "r")
+    fb = zf.read(W * H * 3)
+    zf.close()
+    #imgll = as_StrObject(fb)
+    imgll = StrObject.from_str(fb)
+    npix = W * H * 3
+
+    verts = gc_alloc[Vec3](VN)
+    faces = gc_alloc[Face](FN)
+    build_geometry(verts, faces)
+
+    xpts = gc_alloc[XPt](VN)
+    order = gc_alloc[i32](FN)
+    keys = gc_alloc[f64](FN)
+    stats = gc_alloc[i32](2)
+
+    out = open("/dev/stdout", "w")
+    header = "P6\n" + str(W) + " " + str(H) + "\n255\n"
+
+    sa = 2.0 * 0.21
+    sb = 2.0 * 0.2345
+    sc = 2.0 * 0.2456
+
+    frame_num = 0
+    tt = 0.0
+    acc = 0.0
+    last = time()
+
+    while True:
+        frame_num = frame_num + 1
+        tt = tt + 0.03
+        for p in range(npix):
+            imgll.utf8[p] = 0
+        stats[0] = 0
+        stats[1] = 0
+        t0 = time()
+        render_quads(verts, faces, texs, xpts, order, keys, imgll, stats,
+                     sa * tt, sb * tt, sc * tt)
+        acc = acc + (time() - t0)
+
+        out.write(header)
+        out.write(fb)
+        out.flush()
+
+        delta = time() - last
+        if delta > 1.0:
+            fnf: f64 = frame_num
+            ms = acc * 1000.0 / fnf
+            fps = fnf / delta
+            err.write(str(ms) + " ms (" + str(fps) + " FPS), "
+                      + str(stats[1]) + " tri\n")
+            err.flush()
+            acc = 0.0
+            frame_num = 0
+            last = time()

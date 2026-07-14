@@ -194,11 +194,9 @@ def render_quads(verts: list[Vec3], faces: list[Face], texs: list[Tex],
     crc = math.cos(rc)
     src = math.sin(rc)
 
-    hw: float = W
-    hw = hw / 2.0
-    hh: float = H
-    hh = hh / 2.0
-    wf: float = W
+    hw = W / 2.0
+    hh = H / 2.0
+    wf = W
 
     for k in range(VN):
         vk = verts[k]
@@ -287,13 +285,11 @@ def render_quads(verts: list[Vec3], faces: list[Face], texs: list[Tex],
 def build_geometry(verts: list[Vec3], faces: list[Face]) -> None:
     circle = [Vec3(0.0, 0.0, 0.0)] * N
     for i in range(N):
-        ang: float = i
-        ang = ang * 2.0 * pi / N
+        ang = i * 2.0 * pi / N
         circle[i] = Vec3(R1 + R2 * math.cos(ang), R2 * math.sin(ang), 0.0)
 
     for j in range(M):
-        aj: float = j
-        aj = aj * 2.0 * pi / M
+        aj = j * 2.0 * pi / M
         caj = math.cos(aj)
         saj = math.sin(aj)
         for k in range(N):

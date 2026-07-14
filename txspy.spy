@@ -33,49 +33,49 @@ from array import array
 
 ByteArray = array[u8, 1]
 
-W: i32 = 1920
-H: i32 = 1080
-N: i32 = 7
-M: i32 = 13
-R1: f64 = 1.5
-R2: f64 = 0.5
+W = 1920
+H = 1080
+N = 7
+M = 13
+R1 = 1.5
+R2 = 0.5
 
-VN: i32 = N * M       # number of vertices
-FN: i32 = N * M       # number of quad faces
-NTEX: i32 = 4
+VN = N * M       # number of vertices
+FN = N * M       # number of quad faces
+NTEX = 4
 
 
 @struct
 class Vec3:
-    x: f64
-    y: f64
-    z: f64
+    x: float
+    y: float
+    z: float
 
 
 @struct
 class XPt:
-    px: f64
-    py: f64
-    x: f64
-    y: f64
-    z: f64
+    px: float
+    py: float
+    x: float
+    y: float
+    z: float
 
 
 @struct
 class Tex:
     buf: ByteArray          # pixel buffer (points into the loaded PPM bytes)
-    off: i32                # byte offset where pixel data starts
-    tw: i32
-    th: i32
+    off: int                # byte offset where pixel data starts
+    tw: int
+    th: int
 
 
 @struct
 class Face:
-    tex: i32
-    a: i32
-    b: i32
-    c: i32
-    d: i32
+    tex: int
+    a: int
+    b: int
+    c: int
+    d: int
 
 
 def load_image(filename: str) -> Tex:
@@ -107,7 +107,7 @@ def load_image(filename: str) -> Tex:
     return Tex(buf, 0, tw, th)
 
 
-def fmin3(a: f64, b: f64, c: f64) -> f64:
+def fmin3(a: float, b: float, c: float) -> float:
     m = a
     if b < m:
         m = b
@@ -116,7 +116,7 @@ def fmin3(a: f64, b: f64, c: f64) -> f64:
     return m
 
 
-def fmax3(a: f64, b: f64, c: f64) -> f64:
+def fmax3(a: float, b: float, c: float) -> float:
     m = a
     if b > m:
         m = b
@@ -125,11 +125,11 @@ def fmax3(a: f64, b: f64, c: f64) -> f64:
     return m
 
 
-def draw_triangle(x0: f64, y0: f64, u0: f64, v0: f64,
-                  x1: f64, y1: f64, u1: f64, v1: f64,
-                  x2: f64, y2: f64, u2: f64, v2: f64,
-                  L: f64,
-                  tx: ByteArray, off: i32, tw: i32, th: i32,
+def draw_triangle(x0: float, y0: float, u0: float, v0: float,
+                  x1: float, y1: float, u1: float, v1: float,
+                  x2: float, y2: float, u2: float, v2: float,
+                  L: float,
+                  tx: ByteArray, off: int, tw: int, th: int,
                   img: ByteArray) -> None:
     delta = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0)
     ux = ((u1 - u0) * (y2 - y0) - (u2 - u0) * (y1 - y0)) / delta
@@ -152,14 +152,14 @@ def draw_triangle(x0: f64, y0: f64, u0: f64, v0: f64,
     umask = tw - 1
     vmask = th - 1
 
-    xa = max(0, i32(fmin3(x0, x1, x2)))
-    ya = max(0, i32(fmin3(y0, y1, y2)))
-    xb = min(W, i32(fmax3(x0, x1, x2)) + 1)
-    yb = min(H, i32(fmax3(y0, y1, y2)) + 1)
+    xa = max(0, int(fmin3(x0, x1, x2)))
+    ya = max(0, int(fmin3(y0, y1, y2)))
+    xb = min(W, int(fmax3(x0, x1, x2)) + 1)
+    yb = min(H, int(fmax3(y0, y1, y2)) + 1)
 
-    xaf: f64 = xa
+    xaf: float = xa
     for y in range(ya, yb):
-        yf: f64 = y
+        yf: float = y
         yf = yf + 0.5
         xf = xaf + 0.5
         e01 = xf * nx01 + yf * ny01 + k01
@@ -170,16 +170,16 @@ def draw_triangle(x0: f64, y0: f64, u0: f64, v0: f64,
         row_base = y * W * 3
         for x in range(xa, xb):
             if e01 <= 0.0 and e12 <= 0.0 and e20 <= 0.0:
-                ui = i32(u) & umask
-                vi = i32(v) & vmask
+                ui = int(u) & umask
+                vi = int(v) & vmask
                 tx_idx = (vi * tw + ui) * 3 + off
                 img_idx = row_base + x * 3
-                r: f64 = tx[tx_idx]
-                g: f64 = tx[tx_idx + 1]
-                b: f64 = tx[tx_idx + 2]
-                img[img_idx] = i32(r * L)
-                img[img_idx + 1] = i32(g * L)
-                img[img_idx + 2] = i32(b * L)
+                r: float = tx[tx_idx]
+                g: float = tx[tx_idx + 1]
+                b: float = tx[tx_idx + 2]
+                img[img_idx] = int(r * L)
+                img[img_idx + 1] = int(g * L)
+                img[img_idx + 2] = int(b * L)
             e01 = e01 + nx01
             e12 = e12 + nx12
             e20 = e20 + nx20
@@ -188,9 +188,9 @@ def draw_triangle(x0: f64, y0: f64, u0: f64, v0: f64,
 
 
 def render_quads(verts: list[Vec3], faces: list[Face], texs: list[Tex],
-                 xpts: list[XPt], order: list[i32], keys: list[f64],
+                 xpts: list[XPt], order: list[int], keys: list[float],
                  img: ByteArray,
-                 ra: f64, rb: f64, rc: f64) -> None:
+                 ra: float, rb: float, rc: float) -> None:
     cra = cos(ra)
     sra = sin(ra)
     crb = cos(rb)
@@ -198,11 +198,11 @@ def render_quads(verts: list[Vec3], faces: list[Face], texs: list[Tex],
     crc = cos(rc)
     src = sin(rc)
 
-    hw: f64 = W
+    hw: float = W
     hw = hw / 2.0
-    hh: f64 = H
+    hh: float = H
     hh = hh / 2.0
-    wf: f64 = W
+    wf: float = W
 
     for k in range(VN):
         vk = verts[k]
@@ -291,12 +291,12 @@ def render_quads(verts: list[Vec3], faces: list[Face], texs: list[Tex],
 def build_geometry(verts: list[Vec3], faces: list[Face]) -> None:
     circle = [Vec3(0.0, 0.0, 0.0)] * N
     for i in range(N):
-        ang: f64 = i
+        ang: float = i
         ang = ang * 2.0 * pi / N
         circle[i] = Vec3(R1 + R2 * cos(ang), R2 * sin(ang), 0.0)
 
     for j in range(M):
-        aj: f64 = j
+        aj: float = j
         aj = aj * 2.0 * pi / M
         caj = cos(aj)
         saj = sin(aj)
@@ -375,7 +375,7 @@ def main() -> None:
 
         delta = time() - last
         if delta > 1.0:
-            fnf: f64 = frame_num
+            fnf: float = frame_num
             ms = acc * 1000.0 / fnf
             fps = fnf / delta
             err.write(str(ms) + " ms (" + str(fps) + " FPS)\n")

@@ -1,11 +1,33 @@
+"""
+PyPy version of the texture-mapping demo.
+
+The rendered frames are written to stdout as a stream of P6 PPM images.
+Pipe them into ffplay for display:
+    python txpypy.py | ffplay -loglevel error -autoexit \
+        -f image2pipe -vcodec ppm -i -
+"""
+
 import math, time, sys, array
 from dataclasses import dataclass
+
+W = 1920
+H = 1080
+N = 7
+M = 13
+R1 = 1.5
+R2 = 0.5
+
+VN = N * M       # number of vertices
+FN = N * M       # number of quad faces
+NTEX = 4
+
 
 @dataclass
 class Vec3:
     x: float
     y: float
     z: float
+
 
 @dataclass
 class XPt:
@@ -15,12 +37,14 @@ class XPt:
     y: float
     z: float
 
+
 @dataclass
 class Tex:
-    buf: object
-    off: int
+    buf: object             # pixel buffer (points into the loaded PPM bytes)
+    off: int                # byte offset where pixel data starts
     tw: int
     th: int
+
 
 @dataclass
 class Face:
@@ -32,6 +56,7 @@ class Face:
 
 
 def load_image(filename):
+    """Read a P6 PPM file and return a Tex pointing into its pixel bytes."""
     f = open(filename, "rb")
 
     magic = f.readline()
@@ -52,150 +77,232 @@ def load_image(filename):
     f.close()
     return Tex(pixels, 0, tw, th)
 
-w, h = 1920, 1080
 
-texs = [load_image("3dswr.ppm"),
-        load_image("pyodide_logo.ppm"),
-        load_image("python_logo.ppm"),
-        load_image("numpy_logo.ppm")]
-NTEX = len(texs)
+def draw_triangle(x0, y0, u0, v0,
+                  x1, y1, u1, v1,
+                  x2, y2, u2, v2,
+                  L,
+                  tx, off, tw, th,
+                  img):
+    delta = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0)
+    ux = ((u1 - u0) * (y2 - y0) - (u2 - u0) * (y1 - y0)) / delta
+    uy = ((x1 - x0) * (u2 - u0) - (x2 - x0) * (u1 - u0)) / delta
+    uk = u0 - x0 * ux - y0 * uy
+    vx = ((v1 - v0) * (y2 - y0) - (v2 - v0) * (y1 - y0)) / delta
+    vy = ((x1 - x0) * (v2 - v0) - (x2 - x0) * (v1 - v0)) / delta
+    vk = v0 - x0 * vx - y0 * vy
 
-img = array.array('B', [0]) * (w*h*3)
-ZEROS = array.array('B', [0]) * (w*h*3)
-
-def triangle(x0, y0, u0, v0,
-             x1, y1, u1, v1,
-             x2, y2, u2, v2,
-             L, tx, off, tw, th):
-    delta = (x1-x0)*(y2-y0) - (x2-x0)*(y1-y0)
-    ux = ((u1-u0)*(y2-y0) - (u2-u0)*(y1-y0)) / delta
-    uy = ((x1-x0)*(u2-u0) - (x2-x0)*(u1-u0)) / delta
-    uk = u0 - x0*ux - y0*uy
-    vx = ((v1-v0)*(y2-y0) - (v2-v0)*(y1-y0)) / delta
-    vy = ((x1-x0)*(v2-v0) - (x2-x0)*(v1-v0)) / delta
-    vk = v0 - x0*vx - y0*vy
-
-    nx01, ny01 = y1-y0, x0-x1
-    nx12, ny12 = y2-y1, x1-x2
-    nx20, ny20 = y0-y2, x2-x0
-    k01 = -(x0*nx01 + y0*ny01)
-    k12 = -(x1*nx12 + y1*ny12)
-    k20 = -(x2*nx20 + y2*ny20)
+    nx01 = y1 - y0
+    ny01 = x0 - x1
+    nx12 = y2 - y1
+    ny12 = x1 - x2
+    nx20 = y0 - y2
+    ny20 = x2 - x0
+    k01 = -(x0 * nx01 + y0 * ny01)
+    k12 = -(x1 * nx12 + y1 * ny12)
+    k20 = -(x2 * nx20 + y2 * ny20)
 
     umask = tw - 1
     vmask = th - 1
+
     xa = max(0, int(min(x0, x1, x2)))
     ya = max(0, int(min(y0, y1, y2)))
-    xb = min(w, int(max(x0, x1, x2))+1)
-    yb = min(h, int(max(y0, y1, y2))+1)
+    xb = min(W, int(max(x0, x1, x2)) + 1)
+    yb = min(H, int(max(y0, y1, y2)) + 1)
 
     for y in range(ya, yb):
         yf = y + 0.5
         xf = xa + 0.5
-        e01 = xf*nx01 + yf*ny01 + k01
-        e12 = xf*nx12 + yf*ny12 + k12
-        e20 = xf*nx20 + yf*ny20 + k20
-        u = xf*ux + yf*uy + uk
-        v = xf*vx + yf*vy + vk
-        wp = (y*w + xa) * 3
+        e01 = xf * nx01 + yf * ny01 + k01
+        e12 = xf * nx12 + yf * ny12 + k12
+        e20 = xf * nx20 + yf * ny20 + k20
+        u = xf * ux + yf * uy + uk
+        v = xf * vx + yf * vy + vk
+        row_base = y * W * 3
         for x in range(xa, xb):
-            if e01 <= 0 and e12 <= 0 and e20 <= 0:
+            if e01 <= 0.0 and e12 <= 0.0 and e20 <= 0.0:
                 ui = int(u) & umask
                 vi = int(v) & vmask
-                tx_idx = (vi*tw + ui)*3 + off
-                img[wp] = int(tx[tx_idx] * L)
-                img[wp+1] = int(tx[tx_idx+1] * L)
-                img[wp+2] = int(tx[tx_idx+2] * L)
-            e01 += nx01
-            e12 += nx12
-            e20 += nx20
-            u += ux
-            v += vx
-            wp += 3
+                tx_idx = (vi * tw + ui) * 3 + off
+                img_idx = row_base + x * 3
+                img[img_idx] = int(tx[tx_idx] * L)
+                img[img_idx + 1] = int(tx[tx_idx + 1] * L)
+                img[img_idx + 2] = int(tx[tx_idx + 2] * L)
+            e01 = e01 + nx01
+            e12 = e12 + nx12
+            e20 = e20 + nx20
+            u = u + ux
+            v = v + vx
 
-N = 7
-M = 13
-R1 = 1.5
-R2 = 0.5
 
-circle = [Vec3(R1 + R2*math.cos(i*2*math.pi/N), R2*math.sin(i*2*math.pi/N), 0)
-          for i in range(N)]
+def render_quads(verts, faces, texs, xpts, img, ra, rb, rc):
+    cra = math.cos(ra)
+    sra = math.sin(ra)
+    crb = math.cos(rb)
+    srb = math.sin(rb)
+    crc = math.cos(rc)
+    src = math.sin(rc)
 
-vertices = [Vec3(cp.x*math.cos(i*2*math.pi/M)+cp.z*math.sin(i*2*math.pi/M),
-                 cp.y,
-                 cp.z*math.cos(i*2*math.pi/M)-cp.x*math.sin(i*2*math.pi/M))
-            for i in range(M)
-            for cp in circle]
+    hw = W / 2.0
+    hh = H / 2.0
+    wf = W
 
-faces = [Face((i*M+j) % NTEX,
-              (i+1)%N+j*N, (i+1)%N+(j+1)%M*N, i+(j+1)%M*N, i+j*N)
-         for j in range(M)
-         for i in range(N)]
+    for k in range(VN):
+        vk = verts[k]
+        x = vk.x
+        y = vk.y
+        z = vk.z
+        nx = x * cra + y * sra
+        ny = y * cra - x * sra
+        x = nx
+        y = ny
+        nx2 = x * crb + z * srb
+        nz = z * crb - x * srb
+        x = nx2
+        z = nz
+        ny2 = y * crc + z * src
+        nz2 = z * crc - y * src
+        y = ny2
+        z = nz2
+        px = hw + x * wf / (8.0 + z)
+        py = hh - y * wf / (8.0 + z)
+        xpts[k] = XPt(px, py, x, y, z)
 
-def render_quads(verts, faces, texs, ra, rb, rc):
-    xpts = []
-    for vk in verts:
-        x, y, z = vk.x, vk.y, vk.z
-        x, y = x*math.cos(ra)+y*math.sin(ra), y*math.cos(ra)-x*math.sin(ra)
-        x, z = x*math.cos(rb)+z*math.sin(rb), z*math.cos(rb)-x*math.sin(rb)
-        y, z = y*math.cos(rc)+z*math.sin(rc), z*math.cos(rc)-y*math.sin(rc)
-        xpts.append(XPt(w/2 + x*w/(8+z), h/2 - y*w/(8+z), x, y, z))
+    # painter's algorithm: sort faces back-to-front by the z of their first vertex
     for fc in sorted(faces, key=lambda f: -xpts[f.a].z):
-        xpa, xpb, xpc, xpd = xpts[fc.a], xpts[fc.b], xpts[fc.c], xpts[fc.d]
-        if (xpb.px-xpc.px)*(xpa.py-xpc.py) - (xpb.py-xpc.py)*(xpa.px-xpc.px) > 0:
-            ax, ay, az = xpa.x, xpa.y, xpa.z
-            bx, by, bz = xpb.x, xpb.y, xpb.z
-            cx, cy, cz = xpc.x, xpc.y, xpc.z
-            nrx = (cy-ay)*(bz-az) - (cz-az)*(by-ay)
-            nry = (cz-az)*(bx-ax) - (cx-ax)*(bz-az)
-            nrz = (cx-ax)*(by-ay) - (cy-ay)*(bx-ax)
-            nl = (nrx**2 + nry**2 + nrz**2) ** 0.5
-            L = 0.5 + 0.49*abs(nrz / nl)
+        xpa = xpts[fc.a]
+        xpb = xpts[fc.b]
+        xpc = xpts[fc.c]
+        xpd = xpts[fc.d]
+        pax = xpa.px
+        pay = xpa.py
+        pbx = xpb.px
+        pby = xpb.py
+        pcx = xpc.px
+        pcy = xpc.py
+        pdx = xpd.px
+        pdy = xpd.py
+        if (pbx - pcx) * (pay - pcy) - (pby - pcy) * (pax - pcx) > 0.0:
+            ax = xpa.x
+            ay = xpa.y
+            az = xpa.z
+            bx = xpb.x
+            by = xpb.y
+            bz = xpb.z
+            cx = xpc.x
+            cy = xpc.y
+            cz = xpc.z
+            nrx = (cy - ay) * (bz - az) - (cz - az) * (by - ay)
+            nry = (cz - az) * (bx - ax) - (cx - ax) * (bz - az)
+            nrz = (cx - ax) * (by - ay) - (cy - ay) * (bx - ax)
+            nl = math.sqrt(nrx * nrx + nry * nry + nrz * nrz)
+            L = 0.5 + 0.49 * abs(nrz / nl)
             tex = texs[fc.tex]
-            tx, off, tw, th = tex.buf, tex.off, tex.tw, tex.th
-            triangle(xpb.px, xpb.py, 512, 256,
-                     xpa.px, xpa.py, 0, 256,
-                     xpc.px, xpc.py, 512, 0,
-                     L, tx, off, tw, th)
-            triangle(xpc.px, xpc.py, 512, 0,
-                     xpa.px, xpa.py, 0, 256,
-                     xpd.px, xpd.py, 0, 0,
-                     L, tx, off, tw, th)
+            tx = tex.buf
+            off = tex.off
+            tw = tex.tw
+            th = tex.th
+            draw_triangle(pbx, pby, 512.0, 256.0,
+                          pax, pay, 0.0, 256.0,
+                          pcx, pcy, 512.0, 0.0,
+                          L, tx, off, tw, th, img)
+            draw_triangle(pcx, pcy, 512.0, 0.0,
+                          pax, pay, 0.0, 256.0,
+                          pdx, pdy, 0.0, 0.0,
+                          L, tx, off, tw, th, img)
 
-def animate():
+
+def build_geometry(verts, faces):
+    circle = [Vec3(0.0, 0.0, 0.0)] * N
+    for i in range(N):
+        ang = i * 2.0 * math.pi / N
+        circle[i] = Vec3(R1 + R2 * math.cos(ang), R2 * math.sin(ang), 0.0)
+
+    for j in range(M):
+        aj = j * 2.0 * math.pi / M
+        caj = math.cos(aj)
+        saj = math.sin(aj)
+        for k in range(N):
+            cp = circle[k]
+            x = cp.x
+            y = cp.y
+            z = cp.z
+            verts[j * N + k] = Vec3(x * caj + z * saj, y, z * caj - x * saj)
+
+    for j2 in range(M):
+        for i2 in range(N):
+            t = j2 * N + i2
+            faces[t] = Face((i2 * M + j2) % NTEX,
+                            (i2 + 1) % N + j2 * N,
+                            (i2 + 1) % N + (j2 + 1) % M * N,
+                            i2 + (j2 + 1) % M * N,
+                            i2 + j2 * N)
+
+
+def main():
+    err = sys.stderr
+    err.write("Loading textures...\n")
+
+    texs = [load_image("3dswr.ppm"),
+            load_image("pyodide_logo.ppm"),
+            load_image("python_logo.ppm"),
+            load_image("numpy_logo.ppm")]
+    for tex in texs:
+        err.write("  " + str(tex.tw) + "x" + str(tex.th) + "\n")
+    err.flush()
+
+    # framebuffer: a plain bytearray we mutate every frame.
+    npix = W * H * 3
+    img = array.array('B', [0]) * npix
+    ZEROS = array.array('B', [0]) * npix
+
+    verts = [Vec3(0.0, 0.0, 0.0)] * VN
+    faces = [Face(0, 0, 0, 0, 0)] * FN
+    build_geometry(verts, faces)
+
+    xpts = [XPt(0.0, 0.0, 0.0, 0.0, 0.0)] * VN
+
     out = sys.stdout.buffer
-    header = ('P6\n%d %d\n255\n' % (w, h)).encode()
+    header = ("P6\n%d %d\n255\n" % (W, H)).encode()
+
+    sa = 2.0 * 0.21
+    sb = 2.0 * 0.2345
+    sc = 2.0 * 0.2456
 
     frame_num = 0
-    t = 0
+    tt = 0.0
+    acc = 0.0
     last = time.time()
-    sa = 2 * 0.21
-    sb = 2 * 0.2345
-    sc = 2 * 0.2456
 
-    tt = 0
     try:
         while True:
-            frame_num += 1
-            tt += 0.03
+            frame_num = frame_num + 1
+            tt = tt + 0.03
             img[:] = ZEROS
-            t -= time.time()
-            render_quads(vertices, faces, texs, sa*tt, sb*tt, sc*tt)
-            t += time.time()
+            t0 = time.time()
+            render_quads(verts, faces, texs, xpts, img,
+                         sa * tt, sb * tt, sc * tt)
+            acc = acc + (time.time() - t0)
+
             try:
                 out.write(header)
                 out.write(img.tobytes())
                 out.flush()
             except (BrokenPipeError, OSError):
                 break
+
             delta = time.time() - last
-            if delta > 1:
-                print("%0.3f ms (%0.3f FPS)" %
-                      (t*1000/delta/frame_num, frame_num/delta),
-                      file=sys.stderr)
-                t = frame_num = 0
+            if delta > 1.0:
+                fnf = float(frame_num)
+                ms = acc * 1000.0 / fnf
+                fps = fnf / delta
+                err.write(str(ms) + " ms (" + str(fps) + " FPS)\n")
+                err.flush()
+                acc = 0.0
+                frame_num = 0
                 last = time.time()
     except KeyboardInterrupt:
         pass
 
-animate()
+
+main()

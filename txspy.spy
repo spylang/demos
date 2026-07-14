@@ -157,11 +157,9 @@ def draw_triangle(x0: float, y0: float, u0: float, v0: float,
     xb = min(W, int(fmax3(x0, x1, x2)) + 1)
     yb = min(H, int(fmax3(y0, y1, y2)) + 1)
 
-    xaf: float = xa
     for y in range(ya, yb):
-        yf: float = y
-        yf = yf + 0.5
-        xf = xaf + 0.5
+        yf = y + 0.5
+        xf = xa + 0.5
         e01 = xf * nx01 + yf * ny01 + k01
         e12 = xf * nx12 + yf * ny12 + k12
         e20 = xf * nx20 + yf * ny20 + k20
@@ -174,12 +172,9 @@ def draw_triangle(x0: float, y0: float, u0: float, v0: float,
                 vi = int(v) & vmask
                 tx_idx = (vi * tw + ui) * 3 + off
                 img_idx = row_base + x * 3
-                r: float = tx[tx_idx]
-                g: float = tx[tx_idx + 1]
-                b: float = tx[tx_idx + 2]
-                img[img_idx] = int(r * L)
-                img[img_idx + 1] = int(g * L)
-                img[img_idx + 2] = int(b * L)
+                img[img_idx] = int(tx[tx_idx] * L)
+                img[img_idx + 1] = int(tx[tx_idx + 1] * L)
+                img[img_idx + 2] = int(tx[tx_idx + 2] * L)
             e01 = e01 + nx01
             e12 = e12 + nx12
             e20 = e20 + nx20

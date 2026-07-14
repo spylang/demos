@@ -20,15 +20,12 @@ border to expose the bytes as an `array[u8, 1]`. `file.write` emits exactly
 `length` bytes.
 
 A couple of SPy quirks shaped the structure:
-  - A function that takes parameters cannot assign to a module-level `var`
-    global, so the PPM parser cursor is threaded through as a small
-    gc_ptr[i32] cell instead.
   - `i32(x)` only converts from `f64`; to widen a `u8` to a number, assign it
     to an `f64`/`i32` local (the conversion is implicit).
 """
 
 from math import pi, cos, sin, sqrt, fabs
-from unsafe import gc_alloc, gc_ptr, ptr_copy
+from unsafe import ptr_copy
 from _str import StrObject
 from _range import range
 from time import time
@@ -81,56 +78,33 @@ class Face:
     d: i32
 
 
-def skip_ws(buf: ByteArray, n: i32, cur: gc_ptr[i32]) -> None:
-    while cur[0] < n:
-        c: i32 = buf[cur[0]]
-        if c == 32 or c == 9 or c == 10 or c == 13:
-            cur[0] = cur[0] + 1
-        elif c == 35:  # '#'
-            while cur[0] < n:
-                d: i32 = buf[cur[0]]
-                if d == 10:
-                    break
-                cur[0] = cur[0] + 1
-        else:
-            return
-
-
-def read_int(buf: ByteArray, n: i32, cur: gc_ptr[i32]) -> i32:
-    skip_ws(buf, n, cur)
-    val = 0
-    while cur[0] < n:
-        c: i32 = buf[cur[0]]
-        if c >= 48 and c <= 57:
-            val = val * 10 + (c - 48)
-            cur[0] = cur[0] + 1
-        else:
-            break
-    return val
-
-
 def load_image(filename: str) -> Tex:
-    """Read a P6 PPM file and return a Tex pointing into its bytes.
+    """Read a P6 PPM file and return a Tex pointing into its pixel bytes.
 
     `StrObject.from_str` is the only I/O-border cast: `file.read` returns a
     `str`, and we expose its bytes as a mutable ByteArray via `from_buffer`.
     """
     f = open(filename, "r")
-    data = f.read(-1)
-    f.close()
-    ll = StrObject.from_str(data)
-    buf = ByteArray.from_buffer(ll.utf8, ll.length)
 
-    n: i32 = len(buf)
-    cur = gc_alloc[i32](1)
-    cur[0] = 0
-    skip_ws(buf, n, cur)
-    cur[0] = cur[0] + 2          # skip the "P6" magic
-    tw = read_int(buf, n, cur)
-    th = read_int(buf, n, cur)
-    mx = read_int(buf, n, cur)   # maxval, assumed 255
-    cur[0] = cur[0] + 1          # single whitespace before the pixel data
-    return Tex(buf, cur[0], tw, th)
+    magic = f.readline()
+    if magic != "P6\n":
+        raise ValueError("not a P6 PPM")
+
+    dims = f.readline()
+    while dims[0] == "#":  # skip comment lines
+        dims = f.readline()
+
+    parts = dims.split()
+    tw = int(parts[0])
+    th = int(parts[1])
+
+    maxval_line = f.readline()  # e.g. "255\n", assumed 255
+
+    pixels = f.read(-1)
+    f.close()
+    ll = StrObject.from_str(pixels)
+    buf = ByteArray.from_buffer(ll.utf8, ll.length)
+    return Tex(buf, 0, tw, th)
 
 
 def fmin3(a: f64, b: f64, c: f64) -> f64:

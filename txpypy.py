@@ -31,44 +31,26 @@ class Face:
     d: int
 
 
-def skip_ws(ll, n, cur):
-    while cur[0] < n:
-        c = ll[cur[0]]
-        if c == 32 or c == 9 or c == 10 or c == 13:
-            cur[0] = cur[0] + 1
-        elif c == 35:  # '#'
-            while cur[0] < n:
-                d = ll[cur[0]]
-                if d == 10:
-                    break
-                cur[0] = cur[0] + 1
-        else:
-            return
-
-def read_int(ll, n, cur):
-    skip_ws(ll, n, cur)
-    val = 0
-    while cur[0] < n:
-        c = ll[cur[0]]
-        if c >= 48 and c <= 57:
-            val = val * 10 + (c - 48)
-            cur[0] = cur[0] + 1
-        else:
-            break
-    return val
-
 def load_image(filename):
-    with open(filename, "rb") as f:
-        buf = f.read()
-    n = len(buf)
-    cur = [0]
-    skip_ws(buf, n, cur)
-    cur[0] = cur[0] + 2          # skip the "P6" magic
-    tw = read_int(buf, n, cur)
-    th = read_int(buf, n, cur)
-    mx = read_int(buf, n, cur)   # maxval, assumed 255
-    cur[0] = cur[0] + 1          # single whitespace before the pixel data
-    return Tex(buf, cur[0], tw, th)
+    f = open(filename, "rb")
+
+    magic = f.readline()
+    if magic != b"P6\n":
+        raise ValueError("not a P6 PPM")
+
+    dims = f.readline()
+    while dims[:1] == b"#":  # skip comment lines
+        dims = f.readline()
+
+    parts = dims.split()
+    tw = int(parts[0])
+    th = int(parts[1])
+
+    maxval_line = f.readline()  # e.g. b"255\n", assumed 255
+
+    pixels = f.read()
+    f.close()
+    return Tex(pixels, 0, tw, th)
 
 w, h = 1920, 1080
 

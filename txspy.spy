@@ -24,11 +24,12 @@ A couple of SPy quirks shaped the structure:
     to an `f64`/`i32` local (the conversion is implicit).
 """
 
-from math import pi, cos, sin, sqrt, fabs
+import math
+import time
+from math import pi
 from unsafe import ptr_copy
 from _str import StrObject
 from _range import range
-from time import time
 from array import array
 
 ByteArray = array[u8, 1]
@@ -186,12 +187,12 @@ def render_quads(verts: list[Vec3], faces: list[Face], texs: list[Tex],
                  xpts: list[XPt], order: list[int], keys: list[float],
                  img: ByteArray,
                  ra: float, rb: float, rc: float) -> None:
-    cra = cos(ra)
-    sra = sin(ra)
-    crb = cos(rb)
-    srb = sin(rb)
-    crc = cos(rc)
-    src = sin(rc)
+    cra = math.cos(ra)
+    sra = math.sin(ra)
+    crb = math.cos(rb)
+    srb = math.sin(rb)
+    crc = math.cos(rc)
+    src = math.sin(rc)
 
     hw: float = W
     hw = hw / 2.0
@@ -266,8 +267,8 @@ def render_quads(verts: list[Vec3], faces: list[Face], texs: list[Tex],
             nrx = (cy - ay) * (bz - az) - (cz - az) * (by - ay)
             nry = (cz - az) * (bx - ax) - (cx - ax) * (bz - az)
             nrz = (cx - ax) * (by - ay) - (cy - ay) * (bx - ax)
-            nl = sqrt(nrx * nrx + nry * nry + nrz * nrz)
-            L = 0.5 + 0.49 * fabs(nrz / nl)
+            nl = math.sqrt(nrx * nrx + nry * nry + nrz * nrz)
+            L = 0.5 + 0.49 * math.fabs(nrz / nl)
             tex = texs[fc.tex]
             tx = tex.buf
             off = tex.off
@@ -288,13 +289,13 @@ def build_geometry(verts: list[Vec3], faces: list[Face]) -> None:
     for i in range(N):
         ang: float = i
         ang = ang * 2.0 * pi / N
-        circle[i] = Vec3(R1 + R2 * cos(ang), R2 * sin(ang), 0.0)
+        circle[i] = Vec3(R1 + R2 * math.cos(ang), R2 * math.sin(ang), 0.0)
 
     for j in range(M):
         aj: float = j
         aj = aj * 2.0 * pi / M
-        caj = cos(aj)
-        saj = sin(aj)
+        caj = math.cos(aj)
+        saj = math.sin(aj)
         for k in range(N):
             cp = circle[k]
             x = cp.x
@@ -346,17 +347,17 @@ def main() -> None:
     frame_num = 0
     tt = 0.0
     acc = 0.0
-    last = time()
+    last = time.time()
 
     while True:
         frame_num = frame_num + 1
         tt = tt + 0.03
         for p in range(npix):
             img[p] = 0
-        t0 = time()
+        t0 = time.time()
         render_quads(verts, faces, texs, xpts, order, keys, img,
                      sa * tt, sb * tt, sc * tt)
-        acc = acc + (time() - t0)
+        acc = acc + (time.time() - t0)
 
         # Copy the framebuffer into a fresh str just for writing. `out.write`
         # only accepts `str`, so we bounce through a temporary StrObject and
@@ -368,7 +369,7 @@ def main() -> None:
         out.write(StrObject.to_str(fbll))
         out.flush()
 
-        delta = time() - last
+        delta = time.time() - last
         if delta > 1.0:
             fnf: float = frame_num
             ms = acc * 1000.0 / fnf
@@ -377,4 +378,4 @@ def main() -> None:
             err.flush()
             acc = 0.0
             frame_num = 0
-            last = time()
+            last = time.time()

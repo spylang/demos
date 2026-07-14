@@ -27,7 +27,7 @@ A couple of SPy quirks shaped the structure:
 import math
 import time
 from math import pi
-from unsafe import ptr_copy, ptr_setbytes
+from unsafe import ptr_setbytes, gc_alloc
 from _str import StrObject
 from array import array
 
@@ -335,6 +335,16 @@ def main() -> None:
     out = open("/dev/stdout", "w")
     header = "P6\n" + str(W) + " " + str(H) + "\n255\n"
 
+    # Poor-man's memoryview: SPy has no buffer protocol and `file.write` only
+    # accepts `str`, so we build a "fake" StrObject header whose `utf8` field
+    # aliases the framebuffer bytes directly. Casting it via `StrObject.to_str`
+    # then lets `out.write` emit the buffer in place, with no copy per frame.
+    fbll = gc_alloc[StrObject](1)
+    fbll.length = npix
+    fbll.hash = 0
+    fbll.utf8 = img.__ll__.items
+    fbstr = StrObject.to_str(fbll)
+
     sa = 2.0 * 0.21
     sb = 2.0 * 0.2345
     sc = 2.0 * 0.2456
@@ -354,14 +364,8 @@ def main() -> None:
                          sa * tt, sb * tt, sc * tt)
             acc = acc + (time.time() - t0)
 
-            # Copy the framebuffer into a fresh str just for writing. `out.write`
-            # only accepts `str`, so we bounce through a temporary StrObject and
-            # cast it. This is the only remaining StrObject touch-point in the
-            # hot path.
-            fbll = StrObject.alloc(npix)
-            ptr_copy(fbll.utf8, img.__ll__.items, npix)
             out.write(header)
-            out.write(StrObject.to_str(fbll))
+            out.write(fbstr)
             out.flush()
 
             delta = time.time() - last

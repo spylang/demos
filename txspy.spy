@@ -27,7 +27,7 @@ A couple of SPy quirks shaped the structure:
 import math
 import time
 from math import pi
-from unsafe import ptr_copy
+from unsafe import ptr_copy, ptr_setbytes
 from _str import StrObject
 from array import array
 
@@ -344,33 +344,33 @@ def main() -> None:
     acc = 0.0
     last = time.time()
 
-    while True:
-        frame_num = frame_num + 1
-        tt = tt + 0.03
-        for p in range(npix):
-            img[p] = 0
-        t0 = time.time()
-        render_quads(verts, faces, texs, xpts, order, keys, img,
-                     sa * tt, sb * tt, sc * tt)
-        acc = acc + (time.time() - t0)
+    if True:
+        while True:
+            frame_num = frame_num + 1
+            tt = tt + 0.03
+            ptr_setbytes(img.__ll__.items, 0, npix)
+            t0 = time.time()
+            render_quads(verts, faces, texs, xpts, order, keys, img,
+                         sa * tt, sb * tt, sc * tt)
+            acc = acc + (time.time() - t0)
 
-        # Copy the framebuffer into a fresh str just for writing. `out.write`
-        # only accepts `str`, so we bounce through a temporary StrObject and
-        # cast it. This is the only remaining StrObject touch-point in the
-        # hot path.
-        fbll = StrObject.alloc(npix)
-        ptr_copy(fbll.utf8, img.__ll__.items, npix)
-        out.write(header)
-        out.write(StrObject.to_str(fbll))
-        out.flush()
+            # Copy the framebuffer into a fresh str just for writing. `out.write`
+            # only accepts `str`, so we bounce through a temporary StrObject and
+            # cast it. This is the only remaining StrObject touch-point in the
+            # hot path.
+            fbll = StrObject.alloc(npix)
+            ptr_copy(fbll.utf8, img.__ll__.items, npix)
+            out.write(header)
+            out.write(StrObject.to_str(fbll))
+            out.flush()
 
-        delta = time.time() - last
-        if delta > 1.0:
-            fnf: float = frame_num
-            ms = acc * 1000.0 / fnf
-            fps = fnf / delta
-            err.write(str(ms) + " ms (" + str(fps) + " FPS)\n")
-            err.flush()
-            acc = 0.0
-            frame_num = 0
-            last = time.time()
+            delta = time.time() - last
+            if delta > 1.0:
+                fnf = float(frame_num)
+                ms = acc * 1000.0 / fnf
+                fps = fnf / delta
+                err.write(str(ms) + " ms (" + str(fps) + " FPS)\n")
+                err.flush()
+                acc = 0.0
+                frame_num = 0
+                last = time.time()

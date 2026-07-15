@@ -6,6 +6,7 @@ measures wall-clock end-to-end FPS. Prints a table and writes a bar chart
 to benchmark_all.png.
 """
 
+import argparse
 import subprocess
 import time
 import sys
@@ -56,8 +57,21 @@ def run(cmd, extra_env=None):
 
 
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--cooldown", type=float, default=0.0,
+                    help="Seconds to sleep between variants (default: 0). "
+                         "Use to let the CPU cool down between runs.")
+    ap.add_argument("--scale", type=float, default=1.0,
+                    help="Multiply each variant's frame count by this factor "
+                         "(default: 1.0). Use e.g. 0.5 to run half as many frames.")
+    args = ap.parse_args()
+
     results = []
-    for name, cmd, n, extra_env in VARIANTS:
+    for i, (name, cmd, n, extra_env) in enumerate(VARIANTS):
+        if i > 0 and args.cooldown > 0:
+            print("Cooling down for %.0fs ..." % args.cooldown, flush=True)
+            time.sleep(args.cooldown)
+        n = max(1, int(round(n * args.scale)))
         print("Running %s (n=%d) ..." % (name, n), flush=True)
         fps = run(cmd + ["-n", str(n)], extra_env=extra_env)
         results.append((name, fps))
@@ -76,8 +90,13 @@ def main():
     names = [n for n, f in results if f is not None]
     fps = [f for _, f in results if f is not None]
 
+    baseline = fps[0]
+    labels = [names[0]] + [
+        "%s\n(%.1fx faster)" % (n, f / baseline) for n, f in zip(names[1:], fps[1:])
+    ]
+
     fig, ax = plt.subplots(figsize=(9, 5))
-    bars = ax.bar(names, fps, color="steelblue")
+    bars = ax.bar(labels, fps, color="steelblue")
     ax.set_ylabel("FPS (higher is better)")
     ax.set_title("Texture-mapping demo — headless FPS")
     for bar, v in zip(bars, fps):

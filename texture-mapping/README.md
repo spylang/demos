@@ -1,27 +1,38 @@
-# Texture mapping like it's 1995 in python
+# SPy texture mapping demo
 
-This code repo is for a talk I gave to PyconIT 2026 in Bologna at end of May 2026.
+This demo shows a small software 3D texture mapper implemented in several
+variants (CPython, CPython+JIT, NumPy, Numba, PyPy, and SPy), so that SPy's
+runtime speed can be compared against the Python ecosystem on the same
+workload.
 
-## txmap-in-numpy.pdf / txmap-in-numpy.with-images.html
+The code is derived from Andrea Griffini's
+[texture-mapping-like-in-1995](https://github.com/6502/texture-mapping-like-in-1995),
+originally written for his PyCon Italy 2027 talk. The SPy port (`txspy.spy`)
+mirrors the pure-Python variant closely, but with two accommodations for
+current SPy limitations:
 
-Slides used for the presentation. The HTML file can be navigated using arrows (up/down for first/last and left/right for prev/next)
+  - **Textures are pre-decoded to binary PPM.** SPy has no `subprocess` and no
+    image-decoding library, so PNGs cannot be decoded at runtime. The `.ppm`
+    files under this directory are the pre-decoded textures.
 
-## tx.py
+  - **Rendering is offloaded to `ffplay`.** SPy has no windowing/blitting
+    story yet, so each variant writes P6 PPM frames to stdout and we pipe
+    them into `ffplay` for display. See [`run.sh`](./run.sh).
 
-This is the code described in the presentation; starts in numpy-accelerated mode and
-pressing `p` switches to pure python or back to accelerated mode.
-Requires `numpy` and `pygame` installed.
+Last tested SPy commit: `012ae501` (2026-07-07).
 
-## txpypy.py
+## Running
 
-This is a pure python implementation using a slightly different algorithm as it's based on array.array mono-dimensional buffers.
+```
+./run.sh <variant> [extra args...]
+```
 
-This code use no external dependencies but calls `ffmpeg` at runtime for reading the texture images and calls `ffplay` for doing the rendering. I used this version to show pypy and sPy speed during the presentation.
+Variants: `py315`, `py315-jit`, `numpy`, `numba`, `pypy`, `spy`.
 
-## Speed statistics
+## Benchmark
 
-Every second both programs display a time in millisecond for the pure computation part and a frames-per-second that also includes presentation of the result.
+`benchmark_all.py` runs each variant headlessly (stdout discarded) for a
+fixed number of frames and records the end-to-end FPS reported by each
+program.
 
-## Portability
-
-I only tested on linux 24.04 (old, I know), but other OSs should require little changes.
+![Texture-mapping FPS across variants](benchmark_all.png)

@@ -225,7 +225,20 @@ def build_geometry(verts, faces):
                             i2 + j2 * N)
 
 
+def parse_max_frames(argv):
+    max_frames = -1
+    i = 1
+    while i < len(argv):
+        if argv[i] == "-n" and i + 1 < len(argv):
+            max_frames = int(argv[i + 1])
+            i += 2
+        else:
+            i += 1
+    return max_frames
+
+
 def main():
+    max_frames = parse_max_frames(sys.argv)
     err = sys.stderr
     err.write("Loading textures...\n")
 
@@ -254,13 +267,15 @@ def main():
     sc = 2.0 * 0.2456
 
     frame_num = 0
+    total_frames = 0
     tt = 0.0
     acc = 0.0
     last = time.time()
 
     try:
-        while True:
+        while max_frames < 0 or total_frames < max_frames:
             frame_num = frame_num + 1
+            total_frames = total_frames + 1
             tt = tt + 0.03
             img[:] = 0
             t0 = time.time()

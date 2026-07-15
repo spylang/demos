@@ -308,7 +308,21 @@ def build_geometry(verts: list[Vec3], faces: list[Face]) -> None:
                             i2 + j2 * N)
 
 
-def main() -> None:
+def parse_max_frames(args: list[str]) -> int:
+    max_frames = -1
+    i = 1
+    n = len(args)
+    while i < n:
+        if args[i] == "-n" and i + 1 < n:
+            max_frames = int(args[i + 1])
+            i = i + 2
+        else:
+            i = i + 1
+    return max_frames
+
+
+def main(args: list[str]) -> None:
+    max_frames = parse_max_frames(args)
     err = open("/dev/stderr", "w")
     err.write("Loading textures...\n")
 
@@ -350,13 +364,15 @@ def main() -> None:
     sc = 2.0 * 0.2456
 
     frame_num = 0
+    total_frames = 0
     tt = 0.0
     acc = 0.0
     last = time.time()
 
     if True:
-        while True:
+        while max_frames < 0 or total_frames < max_frames:
             frame_num = frame_num + 1
+            total_frames = total_frames + 1
             tt = tt + 0.03
             ptr_setbytes(img.__ll__.items, 0, npix)
             t0 = time.time()

@@ -1,0 +1,404 @@
+"""
+SPy port of txpypy.py.
+
+SPy has no subprocess module, so the PNG decoding (originally done by spawning
+ffmpeg) and the display (originally ffplay) are split out of the program:
+
+  - Textures must be pre-decoded to binary P6 PPM files. Convert them with:
+        for f in 3dswr pyodide_logo python_logo numpy_logo; do
+            ffmpeg -loglevel error -y -i $f.png -f image2pipe -vcodec ppm $f.ppm
+        done
+
+  - The rendered frames are written to stdout as a stream of P6 PPM images.
+    Pipe them into ffplay for display:
+        spy build -x txspy.spy | ffplay -loglevel error -autoexit \
+            -f image2pipe -vcodec ppm -i -
+
+Binary I/O works because SPy `str` is length-prefixed (not NUL-terminated): we
+read whole files into a `str`, then use `StrObject.from_str` once at the I/O
+border to expose the bytes as an `array[u8, 1]`. `file.write` emits exactly
+`length` bytes.
+
+A couple of SPy quirks shaped the structure:
+  - `i32(x)` only converts from `f64`; to widen a `u8` to a number, assign it
+    to an `f64`/`i32` local (the conversion is implicit).
+"""
+
+import math
+import time
+from math import pi
+from unsafe import ptr_setbytes, gc_alloc
+from _str import StrObject
+from array import array
+
+ByteArray = array[u8, 1]
+
+W = 1920
+H = 1080
+N = 7
+M = 13
+R1 = 1.5
+R2 = 0.5
+
+VN = N * M       # number of vertices
+FN = N * M       # number of quad faces
+NTEX = 4
+
+
+@struct
+class Vec3:
+    x: float
+    y: float
+    z: float
+
+
+@struct
+class XPt:
+    px: float
+    py: float
+    x: float
+    y: float
+    z: float
+
+
+@struct
+class Tex:
+    buf: ByteArray          # pixel buffer (points into the loaded PPM bytes)
+    off: int                # byte offset where pixel data starts
+    tw: int
+    th: int
+
+
+@struct
+class Face:
+    tex: int
+    a: int
+    b: int
+    c: int
+    d: int
+
+
+def load_image(filename: str) -> Tex:
+    """Read a P6 PPM file and return a Tex pointing into its pixel bytes.
+
+    `StrObject.from_str` is the only I/O-border cast: `file.read` returns a
+    `str`, and we expose its bytes as a mutable ByteArray via `from_buffer`.
+    """
+    f = open(filename, "r")
+
+    magic = f.readline()
+    if magic != "P6\n":
+        raise ValueError("not a P6 PPM")
+
+    dims = f.readline()
+    while dims[0] == "#":  # skip comment lines
+        dims = f.readline()
+
+    parts = dims.split()
+    tw = int(parts[0])
+    th = int(parts[1])
+
+    maxval_line = f.readline()  # e.g. "255\n", assumed 255
+
+    pixels = f.read(-1)
+    f.close()
+    ll = StrObject.from_str(pixels)
+    buf = ByteArray.from_buffer(ll.utf8, ll.length)
+    return Tex(buf, 0, tw, th)
+
+
+def fmin3(a: float, b: float, c: float) -> float:
+    m = a
+    if b < m:
+        m = b
+    if c < m:
+        m = c
+    return m
+
+
+def fmax3(a: float, b: float, c: float) -> float:
+    m = a
+    if b > m:
+        m = b
+    if c > m:
+        m = c
+    return m
+
+
+def draw_triangle(x0: float, y0: float, u0: float, v0: float,
+                  x1: float, y1: float, u1: float, v1: float,
+                  x2: float, y2: float, u2: float, v2: float,
+                  L: float,
+                  tx: ByteArray, off: int, tw: int, th: int,
+                  img: ByteArray) -> None:
+    delta = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0)
+    ux = ((u1 - u0) * (y2 - y0) - (u2 - u0) * (y1 - y0)) / delta
+    uy = ((x1 - x0) * (u2 - u0) - (x2 - x0) * (u1 - u0)) / delta
+    uk = u0 - x0 * ux - y0 * uy
+    vx = ((v1 - v0) * (y2 - y0) - (v2 - v0) * (y1 - y0)) / delta
+    vy = ((x1 - x0) * (v2 - v0) - (x2 - x0) * (v1 - v0)) / delta
+    vk = v0 - x0 * vx - y0 * vy
+
+    nx01 = y1 - y0
+    ny01 = x0 - x1
+    nx12 = y2 - y1
+    ny12 = x1 - x2
+    nx20 = y0 - y2
+    ny20 = x2 - x0
+    k01 = -(x0 * nx01 + y0 * ny01)
+    k12 = -(x1 * nx12 + y1 * ny12)
+    k20 = -(x2 * nx20 + y2 * ny20)
+
+    umask = tw - 1
+    vmask = th - 1
+
+    xa = max(0, int(fmin3(x0, x1, x2)))
+    ya = max(0, int(fmin3(y0, y1, y2)))
+    xb = min(W, int(fmax3(x0, x1, x2)) + 1)
+    yb = min(H, int(fmax3(y0, y1, y2)) + 1)
+
+    for y in range(ya, yb):
+        yf = y + 0.5
+        xf = xa + 0.5
+        e01 = xf * nx01 + yf * ny01 + k01
+        e12 = xf * nx12 + yf * ny12 + k12
+        e20 = xf * nx20 + yf * ny20 + k20
+        u = xf * ux + yf * uy + uk
+        v = xf * vx + yf * vy + vk
+        row_base = y * W * 3
+        for x in range(xa, xb):
+            if e01 <= 0.0 and e12 <= 0.0 and e20 <= 0.0:
+                ui = int(u) & umask
+                vi = int(v) & vmask
+                tx_idx = (vi * tw + ui) * 3 + off
+                img_idx = row_base + x * 3
+                img[img_idx] = int(tx[tx_idx] * L)
+                img[img_idx + 1] = int(tx[tx_idx + 1] * L)
+                img[img_idx + 2] = int(tx[tx_idx + 2] * L)
+            e01 = e01 + nx01
+            e12 = e12 + nx12
+            e20 = e20 + nx20
+            u = u + ux
+            v = v + vx
+
+
+def render_quads(verts: list[Vec3], faces: list[Face], texs: list[Tex],
+                 xpts: list[XPt], order: list[int], keys: list[float],
+                 img: ByteArray,
+                 ra: float, rb: float, rc: float) -> None:
+    cra = math.cos(ra)
+    sra = math.sin(ra)
+    crb = math.cos(rb)
+    srb = math.sin(rb)
+    crc = math.cos(rc)
+    src = math.sin(rc)
+
+    hw = W / 2.0
+    hh = H / 2.0
+    wf = W
+
+    for k in range(VN):
+        vk = verts[k]
+        x = vk.x
+        y = vk.y
+        z = vk.z
+        nx = x * cra + y * sra
+        ny = y * cra - x * sra
+        x = nx
+        y = ny
+        nx2 = x * crb + z * srb
+        nz = z * crb - x * srb
+        x = nx2
+        z = nz
+        ny2 = y * crc + z * src
+        nz2 = z * crc - y * src
+        y = ny2
+        z = nz2
+        px = hw + x * wf / (8.0 + z)
+        py = hh - y * wf / (8.0 + z)
+        xpts[k] = XPt(px, py, x, y, z)
+
+    for t in range(FN):
+        order[t] = t
+        fa = faces[t].a
+        keys[t] = -xpts[fa].z
+
+    # insertion sort 'order' ascending by key (painter's algorithm)
+    for a in range(1, FN):
+        cur = order[a]
+        ck = keys[cur]
+        b = a - 1
+        while b >= 0:
+            ob = order[b]
+            if keys[ob] > ck:
+                order[b + 1] = ob
+                b = b - 1
+            else:
+                break
+        order[b + 1] = cur
+
+    for s in range(FN):
+        fc = faces[order[s]]
+        xpa = xpts[fc.a]
+        xpb = xpts[fc.b]
+        xpc = xpts[fc.c]
+        xpd = xpts[fc.d]
+        pax = xpa.px
+        pay = xpa.py
+        pbx = xpb.px
+        pby = xpb.py
+        pcx = xpc.px
+        pcy = xpc.py
+        pdx = xpd.px
+        pdy = xpd.py
+        if (pbx - pcx) * (pay - pcy) - (pby - pcy) * (pax - pcx) > 0.0:
+            ax = xpa.x
+            ay = xpa.y
+            az = xpa.z
+            bx = xpb.x
+            by = xpb.y
+            bz = xpb.z
+            cx = xpc.x
+            cy = xpc.y
+            cz = xpc.z
+            nrx = (cy - ay) * (bz - az) - (cz - az) * (by - ay)
+            nry = (cz - az) * (bx - ax) - (cx - ax) * (bz - az)
+            nrz = (cx - ax) * (by - ay) - (cy - ay) * (bx - ax)
+            nl = math.sqrt(nrx * nrx + nry * nry + nrz * nrz)
+            L = 0.5 + 0.49 * abs(nrz / nl)
+            tex = texs[fc.tex]
+            tx = tex.buf
+            off = tex.off
+            tw = tex.tw
+            th = tex.th
+            draw_triangle(pbx, pby, 512.0, 256.0,
+                          pax, pay, 0.0, 256.0,
+                          pcx, pcy, 512.0, 0.0,
+                          L, tx, off, tw, th, img)
+            draw_triangle(pcx, pcy, 512.0, 0.0,
+                          pax, pay, 0.0, 256.0,
+                          pdx, pdy, 0.0, 0.0,
+                          L, tx, off, tw, th, img)
+
+
+def build_geometry(verts: list[Vec3], faces: list[Face]) -> None:
+    circle = [Vec3(0.0, 0.0, 0.0)] * N
+    for i in range(N):
+        ang = i * 2.0 * pi / N
+        circle[i] = Vec3(R1 + R2 * math.cos(ang), R2 * math.sin(ang), 0.0)
+
+    for j in range(M):
+        aj = j * 2.0 * pi / M
+        caj = math.cos(aj)
+        saj = math.sin(aj)
+        for k in range(N):
+            cp = circle[k]
+            x = cp.x
+            y = cp.y
+            z = cp.z
+            verts[j * N + k] = Vec3(x * caj + z * saj, y, z * caj - x * saj)
+
+    for j2 in range(M):
+        for i2 in range(N):
+            t = j2 * N + i2
+            faces[t] = Face((i2 * M + j2) % NTEX,
+                            (i2 + 1) % N + j2 * N,
+                            (i2 + 1) % N + (j2 + 1) % M * N,
+                            i2 + (j2 + 1) % M * N,
+                            i2 + j2 * N)
+
+
+def parse_max_frames(args: list[str]) -> int:
+    max_frames = -1
+    i = 1
+    n = len(args)
+    while i < n:
+        if args[i] == "-n" and i + 1 < n:
+            max_frames = int(args[i + 1])
+            i = i + 2
+        else:
+            i = i + 1
+    return max_frames
+
+
+def main(args: list[str]) -> None:
+    max_frames = parse_max_frames(args)
+    err = open("/dev/stderr", "w")
+    err.write("Loading textures...\n")
+
+    texs = [load_image("3dswr.ppm"),
+            load_image("spy_logo.ppm"),
+            load_image("anaconda_logo.ppm"),
+            load_image("3dswr.ppm")]
+    for tex in texs:
+        err.write("  " + str(tex.tw) + "x" + str(tex.th) + "\n")
+    err.flush()
+
+    # framebuffer: a plain ByteArray we mutate every frame.
+    npix = W * H * 3
+    img = ByteArray(npix)
+
+    verts = [Vec3(0.0, 0.0, 0.0)] * VN
+    faces = [Face(0, 0, 0, 0, 0)] * FN
+    build_geometry(verts, faces)
+
+    xpts = [XPt(0.0, 0.0, 0.0, 0.0, 0.0)] * VN
+    order = [0] * FN
+    keys = [0.0] * FN
+
+    out = open("/dev/stdout", "w")
+    header = "P6\n" + str(W) + " " + str(H) + "\n255\n"
+
+    # Poor-man's memoryview: SPy has no buffer protocol and `file.write` only
+    # accepts `str`, so we build a "fake" StrObject header whose `utf8` field
+    # aliases the framebuffer bytes directly. Casting it via `StrObject.to_str`
+    # then lets `out.write` emit the buffer in place, with no copy per frame.
+    fbll = gc_alloc[StrObject](1)
+    fbll.length = npix
+    fbll.hash = 0
+    fbll.utf8 = img.__ll__.items
+    fbstr = StrObject.to_str(fbll)
+
+    sa = 2.0 * 0.21
+    sb = 2.0 * 0.2345
+    sc = 2.0 * 0.2456
+
+    frame_num = 0
+    total_frames = 0
+    tt = 0.0
+    acc = 0.0
+    last = time.time()
+    t_start = last
+
+    if True:
+        while max_frames < 0 or total_frames < max_frames:
+            frame_num = frame_num + 1
+            total_frames = total_frames + 1
+            tt = tt + 0.03
+            ptr_setbytes(img.__ll__.items, 0, npix)
+            t0 = time.time()
+            render_quads(verts, faces, texs, xpts, order, keys, img,
+                         sa * tt, sb * tt, sc * tt)
+            acc = acc + (time.time() - t0)
+
+            out.write(header)
+            out.write(fbstr)
+            out.flush()
+
+            if max_frames < 0:
+                delta = time.time() - last
+                if delta > 1.0:
+                    fnf = float(frame_num)
+                    ms = acc * 1000.0 / fnf
+                    fps = fnf / delta
+                    err.write(str(ms) + " ms (" + str(fps) + " FPS)\n")
+                    err.flush()
+                    acc = 0.0
+                    frame_num = 0
+                    last = time.time()
+
+    if max_frames > 0 and total_frames > 0:
+        total = time.time() - t_start
+        fps = float(total_frames) / total
+        err.write("FPS: " + str(fps) + "\n")
+        err.flush()

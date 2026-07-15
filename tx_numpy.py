@@ -1,3 +1,7 @@
+# /// script
+# requires-python = ">=3.12"
+# dependencies = ["numpy"]
+# ///
 """
 NumPy version of the texture-mapping demo.
 
@@ -11,7 +15,6 @@ import math
 import time
 import sys
 import numpy as np
-from PIL import Image
 from dataclasses import dataclass
 
 W = 1920
@@ -68,9 +71,26 @@ Y = np.float32(Y + 0.5)
 
 
 def load_image(filename):
-    """Load an image via PIL and return a Tex wrapping its numpy pixel array."""
-    buf = np.uint8(Image.open(filename)).copy()
-    th, tw = buf.shape[:2]
+    """Read a P6 PPM file and return a Tex pointing into its pixel bytes."""
+    f = open(filename, "rb")
+
+    magic = f.readline()
+    if magic != b"P6\n":
+        raise ValueError("not a P6 PPM")
+
+    dims = f.readline()
+    while dims[:1] == b"#":  # skip comment lines
+        dims = f.readline()
+
+    parts = dims.split()
+    tw = int(parts[0])
+    th = int(parts[1])
+
+    maxval_line = f.readline()  # e.g. b"255\n", assumed 255
+
+    pixels = f.read()
+    f.close()
+    buf = np.frombuffer(pixels, dtype=np.uint8).reshape(th, tw, 3)
     return Tex(buf, 0, tw, th)
 
 
@@ -242,10 +262,10 @@ def main():
     err = sys.stderr
     err.write("Loading textures...\n")
 
-    texs = [load_image("3dswr.png"),
-            load_image("pyodide_logo.png"),
-            load_image("python_logo.png"),
-            load_image("numpy_logo.png")]
+    texs = [load_image("3dswr.ppm"),
+            load_image("pyodide_logo.ppm"),
+            load_image("python_logo.ppm"),
+            load_image("numpy_logo.ppm")]
     for tex in texs:
         err.write("  " + str(tex.tw) + "x" + str(tex.th) + "\n")
     err.flush()

@@ -27,7 +27,9 @@ R2 = 0.5
 
 VN = N * M       # number of vertices
 FN = N * M       # number of quad faces
-NTEX = 4
+
+TEXTURES = ["3dswr.ppm", "python_logo.ppm", "numba_logo.ppm", "3dswr.ppm"]
+NTEX = len(TEXTURES)
 
 
 @dataclass
@@ -266,10 +268,7 @@ def main():
     err = sys.stderr
     err.write("Loading textures...\n")
 
-    texs = [load_image("3dswr.ppm"),
-            load_image("pyodide_logo.ppm"),
-            load_image("python_logo.ppm"),
-            load_image("numpy_logo.ppm")]
+    texs = [load_image(name) for name in TEXTURES]
     for tex in texs:
         err.write("  " + str(tex.tw) + "x" + str(tex.th) + "\n")
     err.flush()

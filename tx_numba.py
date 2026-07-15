@@ -67,7 +67,7 @@ def load_image(filename):
     return Tex(buf.reshape(-1), 0, tw, th)
 
 
-@njit(cache=True, fastmath=True, boundscheck=False)
+@njit(cache=True, fastmath=False, boundscheck=False)
 def draw_triangle(x0, y0, u0, v0,
                   x1, y1, u1, v1,
                   x2, y2, u2, v2,
@@ -281,6 +281,7 @@ def main():
     tt = 0.0
     acc = 0.0
     last = time.time()
+    t_start = last
 
     try:
         while max_frames < 0 or total_frames < max_frames:
@@ -300,18 +301,25 @@ def main():
             except (BrokenPipeError, OSError):
                 break
 
-            delta = time.time() - last
-            if delta > 1.0:
-                fnf = float(frame_num)
-                ms = acc * 1000.0 / fnf
-                fps = fnf / delta
-                err.write(str(ms) + " ms (" + str(fps) + " FPS)\n")
-                err.flush()
-                acc = 0.0
-                frame_num = 0
-                last = time.time()
+            if max_frames < 0:
+                delta = time.time() - last
+                if delta > 1.0:
+                    fnf = float(frame_num)
+                    ms = acc * 1000.0 / fnf
+                    fps = fnf / delta
+                    err.write(str(ms) + " ms (" + str(fps) + " FPS)\n")
+                    err.flush()
+                    acc = 0.0
+                    frame_num = 0
+                    last = time.time()
     except KeyboardInterrupt:
         pass
+
+    if max_frames > 0 and total_frames > 0:
+        total = time.time() - t_start
+        fps = total_frames / total
+        err.write("FPS: " + str(fps) + "\n")
+        err.flush()
 
 
 main()

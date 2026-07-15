@@ -1,13 +1,17 @@
 """
-PyPy version of the texture-mapping demo.
+NumPy version of the texture-mapping demo.
 
 The rendered frames are written to stdout as a stream of P6 PPM images.
 Pipe them into ffplay for display:
-    python txpypy.py | ffplay -loglevel error -autoexit \
+    python tx.py | ffplay -loglevel error -autoexit \
         -f image2pipe -vcodec ppm -i -
 """
 
-import math, time, sys, array
+import math
+import time
+import sys
+import numpy as np
+from PIL import Image
 from dataclasses import dataclass
 
 W = 1920
@@ -40,8 +44,8 @@ class XPt:
 
 @dataclass
 class Tex:
-    buf: object             # pixel buffer (points into the loaded PPM bytes)
-    off: int                # byte offset where pixel data starts
+    buf: object             # pixel buffer (numpy uint8 array of shape (th, tw, 3))
+    off: int                # unused in the numpy version, kept for API parity
     tw: int
     th: int
 
@@ -55,27 +59,19 @@ class Face:
     d: int
 
 
+# precomputed pixel-coordinate grids used by the numpy rasterizer
+X = np.tile(np.array(range(W), dtype=np.int32), (H, 1))
+Y = np.broadcast_to(np.array(range(H), dtype=np.int32).reshape(H, 1), (H, W))
+AA = Y * W + X
+X = np.float32(X + 0.5)
+Y = np.float32(Y + 0.5)
+
+
 def load_image(filename):
-    """Read a P6 PPM file and return a Tex pointing into its pixel bytes."""
-    f = open(filename, "rb")
-
-    magic = f.readline()
-    if magic != b"P6\n":
-        raise ValueError("not a P6 PPM")
-
-    dims = f.readline()
-    while dims[:1] == b"#":  # skip comment lines
-        dims = f.readline()
-
-    parts = dims.split()
-    tw = int(parts[0])
-    th = int(parts[1])
-
-    maxval_line = f.readline()  # e.g. b"255\n", assumed 255
-
-    pixels = f.read()
-    f.close()
-    return Tex(pixels, 0, tw, th)
+    """Load an image via PIL and return a Tex wrapping its numpy pixel array."""
+    buf = np.uint8(Image.open(filename)).copy()
+    th, tw = buf.shape[:2]
+    return Tex(buf, 0, tw, th)
 
 
 def draw_triangle(x0, y0, u0, v0,
@@ -110,29 +106,19 @@ def draw_triangle(x0, y0, u0, v0,
     xb = min(W, int(max(x0, x1, x2)) + 1)
     yb = min(H, int(max(y0, y1, y2)) + 1)
 
-    for y in range(ya, yb):
-        yf = y + 0.5
-        xf = xa + 0.5
-        e01 = xf * nx01 + yf * ny01 + k01
-        e12 = xf * nx12 + yf * ny12 + k12
-        e20 = xf * nx20 + yf * ny20 + k20
-        u = xf * ux + yf * uy + uk
-        v = xf * vx + yf * vy + vk
-        row_base = y * W * 3
-        for x in range(xa, xb):
-            if e01 <= 0.0 and e12 <= 0.0 and e20 <= 0.0:
-                ui = int(u) & umask
-                vi = int(v) & vmask
-                tx_idx = (vi * tw + ui) * 3 + off
-                img_idx = row_base + x * 3
-                img[img_idx] = int(tx[tx_idx] * L)
-                img[img_idx + 1] = int(tx[tx_idx + 1] * L)
-                img[img_idx + 2] = int(tx[tx_idx + 2] * L)
-            e01 = e01 + nx01
-            e12 = e12 + nx12
-            e20 = e20 + nx20
-            u = u + ux
-            v = v + vx
+    Xb = X[ya:yb, xa:xb]
+    Yb = Y[ya:yb, xa:xb]
+    aab = AA[ya:yb, xa:xb]
+    mask = (np.uint8(Xb * nx01 + Yb * ny01 + k01 <= 0) &
+            np.uint8(Xb * nx12 + Yb * ny12 + k12 <= 0) &
+            np.uint8(Xb * nx20 + Yb * ny20 + k20 <= 0))
+    xya = aab[mask == 1]
+    xx = X.ravel()[xya]
+    yy = Y.ravel()[xya]
+    uv = np.int32(xx * vx + yy * vy + vk) & vmask
+    uv *= tw
+    uv += np.int32(xx * ux + yy * uy + uk) & umask
+    img.reshape((W * H, 3))[xya] = np.int32(tx.reshape((tw * th, 3))[uv] * L)
 
 
 def render_quads(verts, faces, texs, xpts, img, ra, rb, rc):
@@ -243,18 +229,16 @@ def main():
     err = sys.stderr
     err.write("Loading textures...\n")
 
-    texs = [load_image("3dswr.ppm"),
-            load_image("pyodide_logo.ppm"),
-            load_image("python_logo.ppm"),
-            load_image("numpy_logo.ppm")]
+    texs = [load_image("3dswr.png"),
+            load_image("pyodide_logo.png"),
+            load_image("python_logo.png"),
+            load_image("numpy_logo.png")]
     for tex in texs:
         err.write("  " + str(tex.tw) + "x" + str(tex.th) + "\n")
     err.flush()
 
-    # framebuffer: a plain bytearray we mutate every frame.
-    npix = W * H * 3
-    img = array.array('B', [0]) * npix
-    ZEROS = array.array('B', [0]) * npix
+    # framebuffer: a numpy uint8 array we mutate every frame.
+    img = np.zeros((H, W, 3), np.uint8)
 
     verts = [Vec3(0.0, 0.0, 0.0)] * VN
     faces = [Face(0, 0, 0, 0, 0)] * FN
@@ -278,7 +262,7 @@ def main():
         while True:
             frame_num = frame_num + 1
             tt = tt + 0.03
-            img[:] = ZEROS
+            img[:] = 0
             t0 = time.time()
             render_quads(verts, faces, texs, xpts, img,
                          sa * tt, sb * tt, sc * tt)

@@ -10,6 +10,7 @@ Pipe them into ffplay for display:
 import math
 import time
 import sys
+import os
 import array
 from dataclasses import dataclass
 
@@ -25,6 +26,8 @@ FN = N * M       # number of quad faces
 
 if sys.implementation.name == "pypy":
     TEXTURES = ["3dswr.ppm", "pypy_logo.ppm", "3dswr.ppm", "pypy_logo.ppm"]
+elif os.environ.get("PYTHON_JIT") == "1":
+    TEXTURES = ["3dswr.ppm", "python_logo.ppm", "3dswr.ppm", "jit_logo.ppm"]
 else:
     TEXTURES = ["3dswr.ppm", "python_logo.ppm", "3dswr.ppm", "python_logo.ppm"]
 NTEX = len(TEXTURES)

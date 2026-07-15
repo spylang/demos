@@ -15,20 +15,31 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-# Frame counts are per-variant so each run takes a few seconds — the pure-py
-# version is much slower and gets a smaller N.
+# Pure-Python variants run under 3.15 to showcase interpreter progress; the
+# numpy/numba variants need C-extension wheels, so they pin to a stable Python
+# (3.13) that has prebuilt wheels on PyPI. Python variants use PEP 723 inline
+# script metadata to pull in dependencies through `uv run`.
+UV315 = ["uv", "run", "--python", "3.15"]
+UV313 = ["uv", "run", "--python", "3.13"]
+
+# Each entry is (label, cmd, n_frames, extra_env).
 VARIANTS = [
-    ("cpython (tx.py)",   ["python", "tx.py"],                                10),
-    ("numpy",             ["python", "tx_numpy.py"],                         100),
-    ("pypy (tx.py)",      ["pypy",   "tx.py"],                               300),
-    ("numba",             ["python", "tx_numba.py"],                         300),
-    ("spy --release",     ["spy", "build", "--release", "-x", "txspy.spy"],  300),
+    ("cpython3.15 (tx.py)",   UV315 + ["tx.py"],                                     10, {}),
+    ("cpython3.15+JIT",       UV315 + ["tx.py"],                                     10, {"PYTHON_JIT": "1"}),
+    ("numpy",                 UV313 + ["tx_numpy.py"],                              100, {}),
+    ("pypy (tx.py)",          ["pypy", "tx.py"],                                    300, {}),
+    ("numba",                 UV313 + ["tx_numba.py"],                              300, {}),
+    ("spy --release",         ["spy", "build", "--release", "-x", "txspy.spy"],     300, {}),
 ]
 
 
-def run(cmd):
+def run(cmd, extra_env=None):
     devnull = open(os.devnull, "wb")
-    proc = subprocess.run(cmd, stdout=devnull, stderr=subprocess.PIPE)
+    env = None
+    if extra_env:
+        env = dict(os.environ)
+        env.update(extra_env)
+    proc = subprocess.run(cmd, stdout=devnull, stderr=subprocess.PIPE, env=env)
     devnull.close()
     if proc.returncode != 0:
         sys.stderr.write("FAILED: " + " ".join(cmd) + "\n")
@@ -46,9 +57,9 @@ def run(cmd):
 
 def main():
     results = []
-    for name, cmd, n in VARIANTS:
+    for name, cmd, n, extra_env in VARIANTS:
         print("Running %s (n=%d) ..." % (name, n), flush=True)
-        fps = run(cmd + ["-n", str(n)])
+        fps = run(cmd + ["-n", str(n)], extra_env=extra_env)
         results.append((name, fps))
         if fps is not None:
             print("  %.2f FPS" % fps)

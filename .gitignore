@@ -1,4 +1,3 @@
-*.ppm
 runspy.sh
 runpypy.sh
 build/

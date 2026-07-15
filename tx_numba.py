@@ -67,7 +67,7 @@ def load_image(filename):
     return Tex(buf.reshape(-1), 0, tw, th)
 
 
-@njit(cache=True, fastmath=False, boundscheck=False)
+@njit(cache=True, fastmath=False, boundscheck=True)
 def draw_triangle(x0, y0, u0, v0,
                   x1, y1, u1, v1,
                   x2, y2, u2, v2,

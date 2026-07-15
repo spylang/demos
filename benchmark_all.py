@@ -20,9 +20,9 @@ import matplotlib.pyplot as plt
 VARIANTS = [
     ("cpython (tx.py)",   ["python", "tx.py"],                                10),
     ("numpy",             ["python", "tx_numpy.py"],                         100),
-    ("numba",             ["python", "tx_numba.py"],                         300),
     ("pypy (tx.py)",      ["pypy",   "tx.py"],                               300),
-    ("spy --release",     ["spy", "build", "--release", "-x", "txspy.spy"],  500),
+    ("numba",             ["python", "tx_numba.py"],                         300),
+    ("spy --release",     ["spy", "build", "--release", "-x", "txspy.spy"],  300),
 ]
 
 

@@ -1,5 +1,5 @@
 """
-PyPy version of the texture-mapping demo.
+Pure Python version of the texture-mapping demo.
 
 The rendered frames are written to stdout as a stream of P6 PPM images.
 Pipe them into ffplay for display:

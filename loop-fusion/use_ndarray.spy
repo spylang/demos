@@ -1,0 +1,46 @@
+"""
+Expression fusion demo for SPy
+
+"""
+
+from lib_ndarray import ndarray, sin
+
+
+def main() -> None:
+    N = 8
+    x = ndarray[f64, 1](N)
+    x.fill(1.0)
+
+    x2 = ndarray[f64, 2](N, N)
+    x2.fill(1.0)
+
+    # -----------------------------------------------------------------------
+    # Case 1: simple addition — x + x
+    #
+    # LazyAdd[f64, 1, ndarray[f64,1], ndarray[f64,1]] is built at runtime,
+    # then __convert_to__ materialises it in one loop:
+    #   out[i] = x[i] + x[i]
+    # -----------------------------------------------------------------------
+    out1: ndarray[f64, 1] = x + x
+    assert out1[0] == 2.0
+
+    out1 = x + x + x
+    assert out1[0] == 3.0
+
+    out2: ndarray[f64, 2] = x2 + x2
+    assert out2[0, 0] == 2.0
+
+    out2 = x2 + x2 + x2
+    assert out2[0, 0] == 3.0
+
+    # -----------------------------------------------------------------------
+    # Case 2: x + sin(x)
+    #
+    # 1.0 + sin(1.0) \simeq 1.8415
+    # -----------------------------------------------------------------------
+
+    out1_sin: ndarray[f64, 1] = x + sin(x)
+    assert abs(out1_sin[0] - 1.84147) < 0.00001
+
+    out2_sin: ndarray[f64, 2] = x2 + sin(x2)
+    assert abs(out2_sin[0, 0] - 1.84147) < 0.00001

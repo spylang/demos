@@ -1,0 +1,50 @@
+from time import time
+
+from lib_array1d_simple import ndarray as array_simple
+from lib_array1d import ndarray as array1d
+from lib_ndarray import ndarray
+
+size = 1000000
+
+
+def add1[arrayT](arr: arrayT) -> arrayT:
+    ret = arrayT(size)
+    for i in range(size):
+        ret[i] = arr[i] + arr[i]
+    return ret
+
+
+def add4[arrayT](arr: arrayT) -> arrayT:
+    ret = arrayT(size)
+    for i in range(size):
+        ret[i] = arr[i] + arr[i] + arr[i] + arr[i] + arr[i]
+    return ret
+
+
+def bench[arrayT, add_fct]() -> None:
+    arr = arrayT(size)
+    arr.fill(1.0)
+
+    res: arrayT
+
+    for i in range(10):
+        res = add_fct[arrayT](arr)
+
+    t_start = time()
+    for _ in range(100):
+        res = add_fct[arrayT](arr)
+    duration = time() - t_start
+
+    print(arrayT, res[0], duration)
+
+
+def main() -> None:
+    print("add1:")
+    bench[array_simple[f64], add1]()
+    bench[array1d[f64], add1]()
+    bench[ndarray[f64, 1], add1]()
+
+    print("add4:")
+    bench[array_simple[f64], add4]()
+    bench[array1d[f64], add4]()
+    bench[ndarray[f64, 1], add4]()

@@ -1,0 +1,11 @@
+from lib_array1d import ndarray
+
+
+def main() -> None:
+    N: i32 = 8
+    x = ndarray[f64](N)
+    x.fill(1.0)
+
+    out1: ndarray[f64] = x + x + x
+
+    assert out1[0] == 3
